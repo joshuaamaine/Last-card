@@ -64,6 +64,7 @@
       <div class="discard" id="discard"></div>
     </div>
     <p class="caption" id="caption" aria-live="polite"></p>
+    <div class="fx" id="fx" hidden aria-hidden="true"></div>
   </section>
 
   <section class="dock" id="dock">
@@ -86,16 +87,15 @@
     <div class="menu-list" id="menuList">
       <button type="button" id="mInvite">Invite friends <small>Share the link</small></button>
       <button type="button" id="mRules">How to play</button>
-      <label for="stackRule">
-        <span>Stack +2 and +4<small id="stackNote">Pass a +2 or +4 along with your own</small></span>
-        <span class="switch"><input type="checkbox" id="stackRule"><span></span></span>
-      </label>
       <button type="button" id="mBot">Add a bot</button>
       <button type="button" id="mFace">Change your face</button>
       <button type="button" id="mLeave" class="danger">Leave the table</button>
       <button type="button" id="mReset" class="danger">Clear the table <small>Everyone here has left</small></button>
       <button type="button" id="mNew">Start a private table <small>A new link just for your group</small></button>
     </div>
+    <h3 class="menu-h">House rules</h3>
+    <p class="menu-note">Always on: stacking +2, +4 and +10, and Legendary cards. <span id="ruleNote"></span></p>
+    <div class="menu-list" id="ruleList"></div>
     <p class="status-line" id="statusLine"></p>
     <button type="button" class="btn" id="menuClose">Close</button>
   </div>
@@ -105,8 +105,17 @@
   <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="seatTitle">
     <h2 id="seatTitle">Player</h2>
     <p id="seatSub"></p>
+    <div class="react-row" id="reactRow" aria-label="Send a reaction"></div>
     <div class="menu-list" id="seatActions"></div>
     <button type="button" class="btn" id="seatClose">Close</button>
+  </div>
+</div>
+
+<div class="sheet" id="targetSheet" hidden>
+  <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="targetTitle">
+    <h2 id="targetTitle">Swap hands with</h2>
+    <div class="menu-list target-list" id="targetList"></div>
+    <button type="button" class="btn" id="targetClose">Keep the card</button>
   </div>
 </div>
 
@@ -152,8 +161,13 @@
       <li>Can't play? <b>Tap the deck</b> to draw. If the new card fits, you can play it or keep it.</li>
       <li><b>Skip</b> jumps the next player. <b>Reverse</b> flips the order (with two players, you go again). <b>+2</b> makes the next player draw two and miss a turn.</li>
       <li><b>Wild</b> picks the color. <b>Wild +4</b> picks the color and the next player draws four.</li>
-      <li>Down to two cards on your turn? Tap <b>Last card!</b> If someone forgets, tap their face to <b>catch</b> them for two cards.</li>
-      <li>With two players, Skip, Reverse, +2 and +4 all mean you <b>go again</b>.</li>
+      <li><b>Stacking:</b> hit with a draw card? Answer with one the same size or bigger (+2 on +2, +4 on +2 or +4, +10 on anything) and the whole pile moves on. Can't stack? Tap the deck and take it all.</li>
+      <li><b>Legendary</b> (gold star): play it on its color and every card of that color in your hand goes with it.</li>
+      <li><b>Magic 7:</b> swap hands with anyone you pick. <b>Spin 0:</b> everyone passes their hand along. <b>Shuffle Hands:</b> every card gets mixed and dealt back out.</li>
+      <li><b>Wild +10</b> turns up on about 1 in 100 cards. <b>Jump-in:</b> hold the exact same card as the top card? Play it any time.</li>
+      <li>You get <b>15 seconds</b> a turn, then you draw. Reach <b>20 cards</b> and you're out of the round.</li>
+      <li>Down to two cards on your turn? Tap <b>Last card!</b> If someone forgets, tap their face to <b>catch</b> them for two cards. Tap anyone's face to send a reaction.</li>
+      <li>With two players, Skip and Reverse mean you <b>go again</b>.</li>
       <li>First to empty their hand wins. Everyone heads back to the lobby, and the next round starts when everyone taps <b>Ready</b>. Wins show on your face.</li>
     </ul>
     <button type="button" class="btn go" id="helpClose">Got it</button>

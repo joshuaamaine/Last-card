@@ -5,7 +5,7 @@
 'use strict';
 
 const E = window.LCEngine;
-const {MAXP, AV_COUNT, COLS, CNAME, CARD_RE, rint, isWild, cardName, canPlay, newTable, newSeat,
+const {MAXP, AV_COUNT, COLS, CNAME, CARD_RE, RULES, TURN_SECONDS, rint, isWild, cardName, canPlay, ruleOn, newTable, newSeat,
   applyAct, botMove, botCatchTarget, doCatch, addBot} = E;
 const CFG = window.LC_CONFIG || {};
 const CONFIGURED = typeof CFG.url === 'string' && /^https:\/\/\S+$/.test(CFG.url) &&
@@ -45,32 +45,45 @@ function validG(g){
 /* ---------- faces and cards ---------- */
 const AV = ['😎','🤠','🦊','🐸','👽','🐼','🦁','🐙','🐧','👻','🐯','🦄','🐵','🐶','🐱','🐻'];
 function avIndex(av, k){ const n = Number(av); return Number.isInteger(n) && n >= 0 && n < AV.length ? n : hash(k) % AV.length; }
-function avHTML(s, tag, attrs){
+function avHTML(s, tag, attrs, timerMs){
   const face = s.b ? '🤖' : AV[avIndex(s.av, s.k)];
   const h = hash(s.k) % 360;
   const t = tag || 'span';
-  return '<' + t + ' class="av" style="--h:' + h + '"' + (attrs || '') + '>' + face +
+  const ring = timerMs !== undefined ? '<svg class="tring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" style="animation-duration:' +
+    (TURN_SECONDS * 1000) + 'ms;animation-delay:-' + Math.max(0, timerMs).toFixed(0) + 'ms"/></svg>' : '';
+  return '<' + t + ' class="av" style="--h:' + h + '"' + (attrs || '') + '>' + face + ring +
     (s.w ? '<span class="wins" aria-label="' + s.w + ' wins">' + s.w + '</span>' : '') + '</' + t + '>';
 }
 const ICON = {
   S:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="3"/><path d="M6.6 17.4 17.4 6.6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
-  R:'<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h15l-3.6-3.6"/><path d="M20 15.5H5l3.6 3.6"/></svg>'
+  R:'<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h15l-3.6-3.6"/><path d="M20 15.5H5l3.6 3.6"/></svg>',
+  X:'<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h4l10 10h4"/><path d="M3 17h4l3-3"/><path d="M14 10l3-3h4"/><path d="M18 4l3 3-3 3"/><path d="M18 14l3 3-3 3"/></svg>'
 };
+const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>';
 function suitHTML(c){ return '<i class="suit s-' + c + '"></i>'; }
+function special(face, label, corner){
+  return '<span class="corner tl">' + corner + '</span><span class="sp"><span class="face">' + face + '</span><span class="lbl">' + label +
+    '</span></span><span class="corner br">' + corner + '</span>';
+}
 function cardHTML(c, cls, style){
-  let inner;
-  if (c === 'wW'){
+  let inner, kind = '';
+  const v = c[1];
+  if (c === 'wT'){ kind = ' ten'; inner = special('+10', 'Wild', '+10'); }
+  else if (c === 'wX'){ kind = ' shuf'; inner = special(ICON.X, 'Shuffle', ICON.X); }
+  else if (v === 'L'){ kind = ' legend'; inner = special(STAR, 'All', STAR); }
+  else if (v === 'M'){ kind = ' magic'; inner = special('7', 'Swap', '7' + suitHTML(c[0])); }
+  else if (v === 'Z'){ kind = ' magic'; inner = special('0', 'Spin', '0' + suitHTML(c[0])); }
+  else if (c === 'wW'){
     inner = '<span class="corner tl">W</span><span class="wheel">' + COLS.map(suitHTML).join('') + '</span><span class="corner br">W</span>';
   } else if (c === 'wF'){
     inner = '<span class="corner tl">+4</span><span class="wf"><span class="face plus">+4</span><span class="wheel row">' + COLS.map(suitHTML).join('') + '</span></span><span class="corner br">+4</span>';
   } else {
-    const v = c[1];
     const g = ICON[v] || (v === 'D' ? '+2' : v);
     const corner = g + suitHTML(c[0]);
     const fcls = 'face' + (v === 'D' ? ' plus' : '') + (v === '6' || v === '9' ? ' ul' : '');
     inner = '<span class="corner tl">' + corner + '</span><span class="' + fcls + '">' + g + '</span><span class="corner br">' + corner + '</span>';
   }
-  return '<span class="card ' + (isWild(c) ? 'wild' : 'c-' + c[0]) + (cls ? ' ' + cls : '') + '" role="img" aria-label="' + esc(cardName(c)) + '"' + (style ? ' style="' + style + '"' : '') + '>' + inner + '</span>';
+  return '<span class="card ' + (isWild(c) ? 'wild' : 'c-' + c[0]) + kind + (cls ? ' ' + cls : '') + '" role="img" aria-label="' + esc(cardName(c)) + '"' + (style ? ' style="' + style + '"' : '') + '>' + inner + '</span>';
 }
 
 /* ---------- state ---------- */
@@ -99,16 +112,23 @@ function isPresent(k){
 function view(G){
   return {
     ph:G.ph, rd:G.rd,
-    seats:G.seats.map(s => ({k:s.k, n:s.n, av:s.av, h:(s.hand || []).join(''), c:!!s.called, s:s.score || 0, w:s.wins || 0, b:!!s.bot, r:!!s.rdy})),
+    seats:G.seats.map(s => ({k:s.k, n:s.n, av:s.av, h:(s.hand || []).join(''), c:!!s.called, s:s.score || 0, w:s.wins || 0, b:!!s.bot, r:!!s.rdy, o:!!s.out})),
     q:G.q.map(x => ({k:x.k, n:x.n, av:x.av})),
     pile:G.disc.slice(-3), pc:G.disc.length, col:COLS.indexOf(G.col) >= 0 ? G.col : 'r', dir:G.dir === -1 ? -1 : 1,
     turn:G.turn, pend:G.pend || 0, pt:G.pt, dr:!!G.drew, dn:G.dn, dk:G.deck.length,
-    log:G.log.slice(-4), win:G.win, champ:G.champ, rules:{stack:!!G.rules.stack, goal:+G.rules.goal || 0},
+    log:G.log.slice(-4), win:G.win, champ:G.champ, rules:RULES.reduce((o, r) => { o[r] = ruleOn(G, r); return o; }, {}), fx:G.fx || null,
     lpn:G.lpn || 0, lpk:G.lpk || null, again:!!G.again
   };
 }
 function mySeat(p){ return p ? p.seats.find(s => s.k === S.pid) || null : null; }
-function ctxPub(p){ const pile = p.pile || []; return {top:pile[pile.length - 1] || 'r0', color:p.col, pend:p.pend, pt:p.pt, stack:p.rules.stack}; }
+function ctxPub(p){ const pile = p.pile || []; return {top:pile[pile.length - 1] || 'r0', color:p.col, pend:p.pend, pt:p.pt}; }
+function topCard(p){ const pile = p.pile || []; return pile[pile.length - 1] || ''; }
+function jumpable(p, ms, c, myTurn){
+  return !!ms && p.ph === 'play' && !myTurn && p.rules.jump && !p.pend && !ms.o && !isWild(c) && c === topCard(p);
+}
+/* When the current turn began, by this device's clock. Used for the 15-second countdown. */
+function turnSig(p){ return p && p.ph === 'play' ? [p.rd, p.turn, p.lpn, p.dr ? 1 : 0, p.pend, p.log[p.log.length - 1] || ''].join('|') : ''; }
+function turnElapsed(){ return Date.now() - (S.turnStart || Date.now()); }
 function shareUrl(){ return location.origin + location.pathname + (CODE === 'main' ? '' : '?t=' + CODE); }
 function rejoinSeat(p, name){
   if (!p || !name) return null;
@@ -194,7 +214,7 @@ function act(t, extra){
 
 /* Bots and bot catches are run by one browser at the table: the online player with the
    lowest id. Everyone else waits longer and only steps in if that browser goes quiet. */
-let botT = null, catchT = null, catchKey = null;
+let botT = null, catchT = null, catchKey = null, timerT = null;
 function driverRank(){
   if (S.mode !== 'live') return 0;
   const ids = Array.from(S.online.keys()).filter(id => /^p[a-z0-9]+$/.test(id)).sort();
@@ -214,9 +234,18 @@ function schedule(){
       if (staleLobby(S.G) && driverRank() === 0) queue(G2 => applyAct(G2, S.pid, S.name || 'Player', {t:'reset'}, isPresent));
     }, 10000);
   } else if (tidyT){ clearTimeout(tidyT); tidyT = null; }
-  if (!G || G.ph !== 'play'){ clearTimeout(catchT); catchKey = null; return; }
+  if (!G || G.ph !== 'play'){ clearTimeout(catchT); clearTimeout(timerT); catchKey = null; return; }
   const rank = driverRank();
   const cur = G.seats[G.turn];
+  clearTimeout(timerT);
+  if (cur && !cur.bot && ruleOn(G, 'timer')){
+    const sig = turnSig(view(G));
+    const wait = TURN_SECONDS * 1000 - turnElapsed() + (rank === 0 ? 150 : 2500 + rank * 1500);
+    timerT = setTimeout(() => {
+      if (turnSig(S.G ? view(S.G) : null) !== sig) return;
+      queue(G2 => applyAct(G2, S.pid, S.name || 'Player', {t:'timeout', x:cur.k}, isPresent));
+    }, Math.max(200, wait));
+  }
   if (cur && cur.bot){
     const v = S.version;
     const delay = rank === 0 ? 900 + rint(700) : 5000 + rank * 1500 + rint(1500);
@@ -245,6 +274,10 @@ function connect(){
     const n = payload && payload.new;
     if (n && validG(n.state)) adopt({version:n.version, state:n.state}, false);
     else refresh();
+  });
+  ch.on('broadcast', {event:'react'}, msg => {
+    const d = msg && msg.payload;
+    if (d && typeof d.t === 'string' && Number.isInteger(d.e)) showReaction(d.t, d.e);
   });
   ch.on('presence', {event:'sync'}, () => {
     const st = ch.presenceState();
@@ -318,6 +351,8 @@ function renderInner(){
   document.title = myTurn ? '(Your turn) Last Card' : 'Last Card';
   if (myTurn && !S.wasMyTurn){ try { if (navigator.vibrate) navigator.vibrate(35); } catch (e){} }
   S.wasMyTurn = myTurn;
+  const sig = turnSig(p);
+  if (sig !== S.turnSigSeen){ S.turnSigSeen = sig; S.turnStart = Date.now(); }
 
   renderNet();
   const pos = renderSeats(p, ms);
@@ -326,7 +361,23 @@ function renderInner(){
   renderBeam(p, cur, pos);
   renderWin(p);
   renderMenu(p, ms);
+  renderFx(p);
   animateDraws(p, pos);
+}
+const FX_TEXT = {ten:'+10!', legend:'Legendary!', swap:'Swap!', spin:'Spin!', shuffle:'Shuffle!'};
+function renderFx(p){
+  const key = p && p.fx ? p.rd + ':' + p.fx.n : null;
+  if (S.fxSeen === undefined){ S.fxSeen = key; return; }
+  if (!key || key === S.fxSeen) return;
+  S.fxSeen = key;
+  const el = $('#fx');
+  el.textContent = FX_TEXT[p.fx.t] || '';
+  el.className = 'fx ' + p.fx.t;
+  el.hidden = false;
+  void el.offsetWidth;
+  el.classList.add('go');
+  clearTimeout(S.fxT);
+  S.fxT = setTimeout(() => { el.hidden = true; }, 1500);
 }
 function renderNet(){
   const el = $('#net');
@@ -406,19 +457,21 @@ function seatHTML(s, p, ms, x, y){
   const cur = p.seats[p.turn];
   const isTurn = playing && cur && cur.k === s.k;
   const away = !s.b && !isPresent(s.k);
-  const catchable = playing && !!ms && n === 1 && !s.c;
+  const catchable = playing && !!ms && n === 1 && !s.c && !s.o;
   let bubble = '';
   if (catchable) bubble = '<span class="bubble hot">Catch!</span>';
   else if (playing && n === 1 && s.c) bubble = '<span class="bubble">Last card!</span>';
   else if (isTurn && p.again) bubble = '<span class="bubble">Again!</span>';
-  const backs = playing ? '<span class="mini-hand" aria-label="' + n + ' cards">' +
+  const backs = playing && !s.o ? '<span class="mini-hand" aria-label="' + n + ' cards">' +
     new Array(Math.min(n, 7)).fill('<i></i>').join('') + '<b>' + n + '</b></span>' : '';
   let tag = '';
-  if (away) tag = '<span class="tagline">Away</span>';
+  if (s.o) tag = '<span class="tagline">Out</span>';
+  else if (away) tag = '<span class="tagline">Away</span>';
   else if (!playing) tag = (s.b || s.r) ? '<span class="tagline ok">Ready</span>' : '<span class="tagline">Not ready</span>';
-  return '<button type="button" class="seat' + (isTurn ? ' turn' : '') + (away ? ' away' : '') + '" data-seat="' + esc(s.k) +
+  const timer = isTurn && !s.b && p.rules.timer ? turnElapsed() : undefined;
+  return '<button type="button" class="seat' + (isTurn ? ' turn' : '') + (away || s.o ? ' away' : '') + '" data-seat="' + esc(s.k) +
     '" style="left:' + x.toFixed(1) + 'px;top:' + y.toFixed(1) + 'px" aria-label="' + esc(s.n) + (catchable ? ', catch them' : '') + '">' +
-    bubble + avHTML(s) + '<span class="nm">' + esc(s.n) + '</span>' + backs + tag + '</button>';
+    bubble + avHTML(s, 'span', '', timer) + '<span class="nm">' + esc(s.n) + '</span>' + backs + tag + '</button>';
 }
 function renderSeats(p, ms){
   const box = $('#table').getBoundingClientRect();
@@ -474,16 +527,17 @@ function renderDock(p, ms, myTurn){
     const n = ms.h.length / 2;
     let sub = '', subCls = '';
     if (playing){
-      if (myTurn){
+      if (ms.o) sub = "You're out this round";
+      else if (myTurn){
         subCls = 'mine';
-        sub = p.pend ? 'Your turn: draw ' + p.pend + (p.rules.stack ? ' or stack' : '') :
+        sub = p.pend ? 'Your turn: stack a draw card or take ' + p.pend :
           p.dr ? 'Play it or keep it' : p.again ? 'Go again!' : 'Your turn';
       } else sub = n + (n === 1 ? ' card' : ' cards');
     } else {
       sub = ms.r ? 'Ready' : 'Not ready';
       subCls = ms.r ? 'mine' : '';
     }
-    meHTML = avHTML(ms, 'button', ' type="button" id="meAv" aria-label="Change your face"') +
+    meHTML = avHTML(ms, 'button', ' type="button" id="meAv" aria-label="Change your face"', myTurn && p.rules.timer ? turnElapsed() : undefined) +
       '<span class="who"><b>' + esc(ms.n) + '</b><span class="' + subCls + '">' + esc(sub) + '</span></span>';
   }
   const meRow = $('#meRow');
@@ -541,6 +595,9 @@ function renderDock(p, ms, myTurn){
         const m = {};
         decode(S.lastHandStr).forEach(c => { m[c] = (m[c] || 0) + 1; });
         mine.forEach((c, i) => { if (m[c]) m[c]--; else mask[i] = true; });
+        // cards left that weren't played (a swap, spin or shuffle): show the new hand being dealt
+        const gone = Object.keys(m).reduce((t, c) => t + m[c], 0);
+        if (gone > 1 || (gone && mask.some(Boolean))) kind = 'deal';
       }
     }
     S.handCards = mine; S.freshMask = mask; S.freshKind = kind;
@@ -561,7 +618,8 @@ function renderDock(p, ms, myTurn){
   handEl.style.justifyContent = overflow ? 'flex-start' : 'center';
   let k = 0;
   setHTML(handEl, 'hand', S.handCards.map((c, i) => {
-    const ok = myTurn && canPlay(c, ctx) && (!p.dr || c === p.dn);
+    const jump = jumpable(p, ms, c, myTurn);
+    const ok = (myTurn && canPlay(c, ctx) && (!p.dr || c === p.dn)) || jump;
     const isNew = fresh && S.freshMask[i];
     const cls = isNew ? (S.freshKind === 'deal' || REDUCED ? ' dealt' : ' incoming') : '';
     const st = (i ? 'margin-left:' + (step - cw).toFixed(1) + 'px;' : '') + (isNew ? '--d:' + (k++ * 45) + 'ms' : '');
@@ -616,7 +674,9 @@ function animateDraws(p, pos){
   const prev = S.prevCounts, prevRd = S.prevRd;
   S.prevCounts = counts; S.prevRd = p ? p.rd : null;
   const reveal = () => document.querySelectorAll('#hand .incoming').forEach(b => b.classList.remove('incoming'));
-  if (!playing || !prev || prevRd !== p.rd || REDUCED){ reveal(); return; }
+  const rearranged = p && p.fx && ['swap', 'spin', 'shuffle'].indexOf(p.fx.t) >= 0 && p.fx.n !== S.fxFlown;
+  if (rearranged) S.fxFlown = p.fx.n;
+  if (!playing || !prev || prevRd !== p.rd || REDUCED || rearranged){ reveal(); return; }
   const top = $('#deckBtn .deck-stack .card:last-child');
   if (!top){ reveal(); return; }
   const from = top.getBoundingClientRect();
@@ -635,12 +695,23 @@ function animateDraws(p, pos){
   }
   setTimeout(reveal, 1600);
 }
+const RULE_INFO = {
+  seven:['Magic 7', 'Swap hands with anyone you pick'],
+  zero:['Spin 0', 'Everyone passes their hand along (2 in the deck)'],
+  ten:['Wild +10', 'Turns up on 1 in 100 cards dealt or drawn'],
+  shuffle:['Shuffle Hands', "A wild that mixes and redeals everyone's cards"],
+  jump:['Jump-in', 'Slam down the exact same card as the top card, any time'],
+  timer:['15-second turns', 'Run out of time and you draw'],
+  mercy:['Mercy rule', 'Hit 20 cards and you are out of the round']
+};
 function renderMenu(p, ms){
   const playing = !!(p && p.ph === 'play');
-  const sr = $('#stackRule');
-  sr.checked = !!(p && p.rules.stack);
-  sr.disabled = !ms || playing;
-  $('#stackNote').textContent = playing ? 'You can change this between rounds' : 'Pass a +2 or +4 along with your own';
+  setHTML($('#ruleList'), 'rules', RULES.map(r => {
+    const on = p ? p.rules[r] : true, info = RULE_INFO[r];
+    return '<label for="rule-' + r + '"><span>' + info[0] + '<small>' + info[1] + '</small></span><span class="switch"><input type="checkbox" id="rule-' + r +
+      '" data-rule="' + r + '"' + (on ? ' checked' : '') + (!ms || playing ? ' disabled' : '') + '><span></span></span></label>';
+  }).join(''));
+  $('#ruleNote').textContent = playing ? 'House rules can change between rounds.' : ms ? 'Anyone at the table can change these before a round.' : 'Sit down to change house rules.';
   $('#mBot').hidden = !(ms && p && !playing && p.seats.length < MAXP);
   $('#mFace').hidden = !ms;
   $('#mLeave').hidden = !(ms || (p && p.q.some(x => x.k === S.pid)));
@@ -656,7 +727,9 @@ function onHandTap(btn, c){
   const p = S.G ? view(S.G) : null, ms = mySeat(p);
   if (!ms || p.ph !== 'play') return;
   const cur = p.seats[p.turn];
-  if (!cur || cur.k !== S.pid){ toast('Wait for your turn.'); return; }
+  const myTurn = !!cur && cur.k === S.pid;
+  if (!myTurn && jumpable(p, ms, c, false)){ act('play', {c:c}); return; }
+  if (!myTurn){ toast('Wait for your turn.'); return; }
   if (S.busy) return;
   if (!(canPlay(c, ctxPub(p)) && (!p.dr || c === p.dn))){
     btn.classList.remove('nope'); void btn.offsetWidth; btn.classList.add('nope');
@@ -665,7 +738,37 @@ function onHandTap(btn, c){
     return;
   }
   if (isWild(c)){ S.pickCard = c; $('#picker').hidden = false; return; }
+  if (c[1] === 'M' && ms.h.length > 2){ openTargets(p, c); return; }
   act('play', {c:c});
+}
+function openTargets(p, c){
+  const others = p.seats.filter(s => s.k !== S.pid && !s.o);
+  setHTML($('#targetList'), 'targets', others.map(s => '<button type="button" data-target="' + esc(s.k) + '">' +
+    '<span class="tgt">' + avHTML(s) + '<span>' + esc(s.n) + '</span></span><small>' + (s.h.length / 2) + (s.h.length === 2 ? ' card' : ' cards') + '</small></button>').join(''));
+  $('#targetSheet').dataset.c = c;
+  $('#targetSheet').hidden = false;
+}
+const REACTS = ['😂','🔥','😤','👏','😱','💀','🤡','🫡'];
+let lastReact = 0;
+function sendReaction(k, e){
+  if (Date.now() - lastReact < 700) return;
+  lastReact = Date.now();
+  showReaction(k, e);
+  if (ch) ch.send({type:'broadcast', event:'react', payload:{f:S.pid, t:k, e:e}}).catch(() => {});
+}
+function showReaction(k, e){
+  const face = REACTS[e];
+  if (!face) return;
+  const target = k === S.pid ? $('#meRow .av') : document.querySelector('.seat[data-seat="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"] .av');
+  if (!target) return;
+  const r = target.getBoundingClientRect();
+  const el = document.createElement('span');
+  el.className = 'react';
+  el.textContent = face;
+  el.style.left = (r.left + r.width / 2) + 'px';
+  el.style.top = (r.top + r.height / 2) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1700);
 }
 function onSeatTap(k){
   const p = S.G ? view(S.G) : null, ms = mySeat(p);
@@ -673,7 +776,7 @@ function onSeatTap(k){
   const s = p.seats.find(x => x.k === k);
   if (!s) return;
   const n = s.h.length / 2;
-  if (p.ph === 'play' && ms && n === 1 && !s.c){ act('catch', {x:k}); return; }
+  if (p.ph === 'play' && ms && n === 1 && !s.c && !s.o){ act('catch', {x:k}); return; }
   const away = !s.b && !isPresent(s.k);
   const cur = p.seats[p.turn];
   let acts = '';
@@ -684,6 +787,7 @@ function onSeatTap(k){
     (p.ph === 'lobby' ? '' : ' · ' + n + (n === 1 ? ' card' : ' cards'));
   $('#seatActions').innerHTML = acts;
   $('#seatActions').hidden = !acts;
+  setHTML($('#reactRow'), 'reacts', REACTS.map((f, i) => '<button type="button" data-react="' + i + '" aria-label="Send ' + f + '">' + f + '</button>').join(''));
   $('#seatSheet').dataset.k = k;
   $('#seatSheet').hidden = false;
 }
@@ -704,7 +808,8 @@ async function share(){
   try { await navigator.clipboard.writeText(url); toast('Link copied'); }
   catch (e){ toast(url); }
 }
-function closeSheets(){ ['menu', 'seatSheet', 'faceSheet', 'picker', 'help'].forEach(id => { $('#' + id).hidden = true; }); S.pickCard = null; }
+const SHEETS = ['menu', 'seatSheet', 'faceSheet', 'picker', 'help', 'targetSheet'];
+function closeSheets(){ SHEETS.forEach(id => { $('#' + id).hidden = true; }); S.pickCard = null; }
 function openFace(){
   const p = S.G ? view(S.G) : null, ms = mySeat(p);
   renderAvPick($('#facePick'), ms ? avIndex(ms.av, ms.k) : S.av);
@@ -725,7 +830,8 @@ function wire(){
   $('#mLeave').addEventListener('click', () => { closeSheets(); act('leave'); });
   $('#mReset').addEventListener('click', () => { closeSheets(); act('reset'); });
   $('#mNew').addEventListener('click', () => { location.href = location.pathname + '?t=' + randId(6); });
-  $('#stackRule').addEventListener('change', e => act('rule', {r:'stack', v:e.target.checked}));
+  $('#ruleList').addEventListener('change', e => { const r = e.target.dataset && e.target.dataset.rule; if (r) act('rule', {r:r, v:e.target.checked}); });
+  $('#targetClose').addEventListener('click', closeSheets);
   $('#helpClose').addEventListener('click', closeSheets);
   $('#seatClose').addEventListener('click', closeSheets);
   $('#faceClose').addEventListener('click', closeSheets);
@@ -737,7 +843,7 @@ function wire(){
     if (c) act('play', {c:c, col:b.dataset.col});
   }));
   $('#over').addEventListener('click', e => { if (e.target.id === 'over') $('#over').hidden = true; });
-  ['menu', 'seatSheet', 'faceSheet', 'picker', 'help'].forEach(id => $('#' + id).addEventListener('click', e => {
+  SHEETS.forEach(id => $('#' + id).addEventListener('click', e => {
     if (e.target.id === id) closeSheets();
   }));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheets(); });
@@ -753,6 +859,16 @@ function wire(){
         if (ms) act('join', {av:v});
       } else render();
       return;
+    }
+    if (b.dataset.target !== undefined){
+      const c = $('#targetSheet').dataset.c;
+      closeSheets();
+      return act('play', {c:c, x:b.dataset.target});
+    }
+    if (b.dataset.react !== undefined){
+      const k = $('#seatSheet').dataset.k;
+      closeSheets();
+      return sendReaction(k, +b.dataset.react);
     }
     if (b.dataset.sa){
       const k = $('#seatSheet').dataset.k;

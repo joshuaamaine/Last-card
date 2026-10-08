@@ -201,6 +201,49 @@ button{cursor:pointer}
 .rules b{color:var(--ink)}
 .toast{position:fixed;left:50%;top:calc(64px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:30;max-width:calc(100% - 32px);padding:10px 14px;border-radius:12px;background:var(--paper);color:var(--ink);font-weight:700;font-size:14px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
 
+
+/* ---------- turn timer ring ---------- */
+.tring{position:absolute;inset:-7px;width:calc(100% + 14px);height:calc(100% + 14px);transform:rotate(-90deg);pointer-events:none;overflow:visible}
+.tring circle{fill:none;stroke:var(--gold);stroke-width:3;stroke-linecap:round;stroke-dasharray:116.2;stroke-dashoffset:0;animation-name:tdrain;animation-timing-function:linear;animation-fill-mode:forwards}
+@keyframes tdrain{70%{stroke:var(--gold)}100%{stroke-dashoffset:116.2;stroke:var(--signal)}}
+
+/* ---------- special cards ---------- */
+.sp{display:flex;flex-direction:column;align-items:center;gap:calc(var(--w) * .02)}
+.sp .face{font-size:calc(var(--w) * .5)}
+.sp .face svg{width:calc(var(--w) * .46);height:calc(var(--w) * .46)}
+.lbl{font-family:var(--f-body);font-weight:700;font-size:calc(var(--w) * .12);letter-spacing:.06em;text-transform:uppercase;line-height:1;white-space:nowrap}
+.card.legend{box-shadow:inset 0 0 0 calc(var(--w) * .055) var(--gold),inset 0 0 0 calc(var(--w) * .075) #FFFFFF,0 2px 4px rgba(0,0,0,.25),0 6px 14px rgba(0,0,0,.2)}
+.card.legend::before{border-color:var(--gold);border-width:max(1.5px,calc(var(--w) * .025))}
+.card.legend .face{color:var(--gold);filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+.card.legend::after,.card.ten::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.42) 50%,transparent 65%);background-size:250% 100%;animation:sheen 2.8s ease-in-out infinite;pointer-events:none}
+.card.c-y.legend .face{color:#FFFFFF}
+.card.magic::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 25% 30%,rgba(255,255,255,.5) 0 1.5px,transparent 2px),radial-gradient(circle at 72% 64%,rgba(255,255,255,.45) 0 1.5px,transparent 2px),radial-gradient(circle at 60% 22%,rgba(255,255,255,.4) 0 1px,transparent 1.5px),radial-gradient(circle at 30% 78%,rgba(255,255,255,.4) 0 1px,transparent 1.5px)}
+.card.ten{--cc:#14161C;box-shadow:inset 0 0 0 calc(var(--w) * .055) var(--gold),0 2px 4px rgba(0,0,0,.25),0 6px 14px rgba(0,0,0,.2)}
+.card.ten .face{color:var(--gold);font-size:calc(var(--w) * .42)}
+.card.ten .corner{color:var(--gold);font-size:calc(var(--w) * .16)}
+.card.shuf{--cc:#2B2140}
+@keyframes sheen{0%{background-position:150% 0}60%,100%{background-position:-50% 0}}
+
+/* ---------- big moments ---------- */
+.fx{position:absolute;left:50%;top:50%;z-index:5;transform:translate(-50%,-50%) scale(.6);opacity:0;white-space:nowrap;pointer-events:none;
+  font-family:var(--f-display);font-weight:900;font-size:64px;letter-spacing:.02em;text-transform:uppercase;color:var(--chalk);text-shadow:0 4px 0 rgba(0,0,0,.35),0 0 24px rgba(0,0,0,.35)}
+.fx.ten,.fx.legend{color:var(--gold)}
+.fx.swap,.fx.spin,.fx.shuffle{color:#B9E3FF}
+.fx.go{animation:fxpop 1.4s cubic-bezier(.2,.9,.3,1.2) forwards}
+@keyframes fxpop{0%{opacity:0;transform:translate(-50%,-50%) scale(.5) rotate(-6deg)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.08) rotate(-3deg)}70%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-3deg)}100%{opacity:0;transform:translate(-50%,-60%) scale(1) rotate(-3deg)}}
+.react{position:fixed;z-index:25;font-size:40px;line-height:1;transform:translate(-50%,-50%);pointer-events:none;animation:floatup 1.6s ease-out forwards}
+@keyframes floatup{0%{opacity:0;transform:translate(-50%,-30%) scale(.4)}15%{opacity:1;transform:translate(-50%,-60%) scale(1.25)}100%{opacity:0;transform:translate(-50%,-190%) scale(1)}}
+
+/* ---------- menu extras ---------- */
+.menu-h{margin:6px 0 0;font-family:var(--f-display);font-weight:900;font-size:20px;letter-spacing:.03em;text-transform:uppercase}
+.menu-note{margin:0;font-size:13px;color:var(--paper-muted)}
+.react-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.react-row button{width:48px;height:48px;border-radius:50%;border:0;background:#EEF0F4;font-size:26px;line-height:1;display:grid;place-items:center}
+.target-list .tgt{display:flex;align-items:center;gap:10px}
+.target-list .av{--s:38px;box-shadow:0 0 0 2px #FFFFFF,0 2px 6px rgba(0,0,0,.2);font-size:22px}
+.target-list .av .wins{display:none}
+@media (prefers-reduced-motion:reduce){.fx.go{opacity:1;transform:translate(-50%,-50%)}}
+
 @keyframes land{from{transform:translate(var(--fx,0px),var(--fy,-90px)) rotate(calc(var(--rot,0deg) - 20deg)) scale(.62);opacity:.35}to{transform:rotate(var(--rot,0deg));opacity:1}}
 @keyframes dealt{from{transform:translateY(-36px) scale(.9);opacity:0}}
 @keyframes pop{50%{transform:translateX(-50%) scale(1.08)}}
