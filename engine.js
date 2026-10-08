@@ -43,7 +43,7 @@ function newTable(){
 function validAv(v){ v = Number(v); return Number.isInteger(v) && v >= 0 && v < AV_COUNT ? v : null; }
 function newSeat(k, n, bot, av){
   const a = validAv(av);
-  return {k:k, n:n, bot:!!bot, av:a === null ? rint(AV_COUNT) : a, hand:[], called:false, score:0, wins:0};
+  return {k:k, n:n, bot:!!bot, av:a === null ? rint(AV_COUNT) : a, hand:[], called:false, score:0, wins:0, rdy:false};
 }
 function seatOf(G, k){ for (let i = 0; i < G.seats.length; i++) if (G.seats[i].k === k) return i; return -1; }
 function addLog(G, m){ G.log.push(m); if (G.log.length > 6) G.log.splice(0, G.log.length - 6); }
@@ -76,9 +76,8 @@ function startRound(G){
   for (const x of G.q){ if (seatOf(G, x.k) < 0 && G.seats.length < MAXP) G.seats.push(newSeat(x.k, x.n, false, x.av)); }
   G.q = [];
   if (G.seats.length < 2) return false;
-  if (G.champ){ for (const s of G.seats){ s.score = 0; s.wins = 0; } G.champ = null; G.rd = 0; }
   G.deck = newDeck(); G.disc = [];
-  for (const s of G.seats){ s.hand = []; s.called = false; }
+  for (const s of G.seats){ s.hand = []; s.called = false; s.rdy = false; }
   for (let r = 0; r < 7; r++) for (const s of G.seats) s.hand.push(G.deck.pop());
   let i = G.deck.length - 1;
   while (i >= 0 && !/[0-9]/.test(G.deck[i][1])) i--;
@@ -86,7 +85,7 @@ function startRound(G){
   G.disc = [first]; G.col = first[0];
   G.rd++; G.dir = 1; G.turn = (G.rd - 1) % G.seats.length;
   G.pend = 0; G.pt = null; G.drew = false; G.dn = null; G.win = null; G.ph = 'play';
-  G.lpk = null; G.lpn++;
+  G.lpk = null; G.lpn++; G.again = false;
   addLog(G, 'Round ' + G.rd + ' dealt. First turn: ' + G.seats[G.turn].n + '.');
   return true;
 }
@@ -95,9 +94,43 @@ function endRound(G, wi){
   let p = 0;
   for (const s of G.seats) if (s !== w) for (const c of s.hand) p += pts(c);
   w.score += p; w.wins++;
-  G.win = {k:w.k, p:p}; G.ph = 'over'; G.pend = 0; G.pt = null; G.drew = false; G.dn = null;
-  addLog(G, w.n + ' wins round ' + G.rd + ' and scores ' + p + '.');
-  if (G.rules.goal && w.score >= G.rules.goal){ G.champ = w.k; addLog(G, w.n + ' wins the match!'); }
+  G.win = {k:w.k, n:w.n, av:w.av, b:!!w.bot, w:w.wins, p:p, rd:G.rd};
+  addLog(G, w.n + ' wins round ' + G.rd + '!');
+  // Back to the lobby: bots leave, anyone waiting sits down, and everyone readies up again.
+  G.ph = 'lobby'; G.pend = 0; G.pt = null; G.drew = false; G.dn = null;
+  G.seats = G.seats.filter(s => !s.bot);
+  for (const x of G.q){ if (seatOf(G, x.k) < 0 && G.seats.length < MAXP) G.seats.push(newSeat(x.k, x.n, false, x.av)); }
+  G.q = [];
+  for (const s of G.seats){ s.hand = []; s.called = false; s.rdy = false; }
+  G.deck = []; G.disc = [];
+}
+/* Start the round once every player at the table is ready (bots always are).
+   Players who aren't here anymore lose their seat so they can't stall the game. */
+function maybeStart(G, present){
+  if (G.ph !== 'lobby') return false;
+  const here = G.seats.filter(s => !s.bot && present(s.k));
+  if (!here.length || here.some(s => !s.rdy)) return false;
+  if (here.length + G.seats.filter(s => s.bot).length < 2) return false;
+  G.seats = G.seats.filter(s => s.bot || present(s.k));
+  return startRound(G);
+}
+function doReady(G, k, v, present){
+  if (G.ph !== 'lobby') return false;
+  const si = seatOf(G, k);
+  if (si < 0) return false;
+  const s = G.seats[si];
+  if (s.rdy === !!v) return false;
+  s.rdy = !!v;
+  maybeStart(G, present);
+  return true;
+}
+/* A lobby with no people left in it should not keep bots around. */
+function tidy(G){
+  if (G.ph !== 'play' && !G.seats.some(s => !s.bot)){ G.seats = []; G.q = G.q || []; }
+  if (G.ph === 'play' && !G.seats.some(s => !s.bot)){
+    G.ph = 'lobby'; G.seats = []; G.deck = []; G.disc = []; G.pend = 0; G.pt = null; G.drew = false; G.dn = null;
+    addLog(G, 'Everyone left. The table is open.');
+  }
 }
 function doPlay(G, k, card, col){
   if (G.ph !== 'play') return false;
@@ -121,13 +154,13 @@ function doPlay(G, k, card, col){
     msg += '. ' + G.seats[nextIdx(G, 1)].n + ' is skipped';
     G.turn = nextIdx(G, 2);
   } else if (v === 'R'){
-    if (G.seats.length === 2){ G.turn = nextIdx(G, 2); msg += ' and goes again'; }
-    else { G.dir *= -1; G.turn = nextIdx(G, 1); msg += '. Order reversed'; }
+    if (G.seats.length === 2){ G.turn = nextIdx(G, 2); }
+    else { G.dir *= -1; G.turn = nextIdx(G, 1); G.again = false; msg += '. Order reversed'; }
   } else if (v === 'D' || v === 'F'){
     const n = v === 'D' ? 2 : 4;
     if (G.rules.stack){
       G.pend += n; G.pt = (v === 'F' || G.pt === 'F') ? 'F' : 'D';
-      G.turn = nextIdx(G, 1);
+      G.turn = nextIdx(G, 1); G.again = false;
       msg += '. ' + G.seats[G.turn].n + ' faces +' + G.pend;
     } else {
       const vs = G.seats[nextIdx(G, 1)];
@@ -136,8 +169,10 @@ function doPlay(G, k, card, col){
       G.turn = nextIdx(G, 2);
     }
   } else {
-    G.turn = nextIdx(G, 1);
+    G.turn = nextIdx(G, 1); G.again = false;
   }
+  G.again = G.turn === si;
+  if (G.again && s.hand.length) msg += '. ' + s.n + ' goes again';
   addLog(G, msg + '.');
   if (!s.hand.length) endRound(G, si);
   return true;
@@ -149,23 +184,23 @@ function doDraw(G, k){
   const s = G.seats[si];
   if (G.pend > 0){
     const got = drawTo(G, s, G.pend);
-    G.pend = 0; G.pt = null; G.turn = nextIdx(G, 1);
+    G.pend = 0; G.pt = null; G.turn = nextIdx(G, 1); G.again = false;
     addLog(G, s.n + ' drew ' + got + '.');
     return true;
   }
   if (G.drew) return false;
   const got = drawTo(G, s, 1);
-  if (!got){ G.turn = nextIdx(G, 1); addLog(G, s.n + ' passed. No cards left to draw.'); return true; }
+  if (!got){ G.turn = nextIdx(G, 1); G.again = false; addLog(G, s.n + ' passed. No cards left to draw.'); return true; }
   const c = s.hand[s.hand.length - 1];
   if (canPlay(c, ctxOf(G))){ G.drew = true; G.dn = c; addLog(G, s.n + ' drew a card.'); }
-  else { G.turn = nextIdx(G, 1); addLog(G, s.n + ' drew a card and passed.'); }
+  else { G.turn = nextIdx(G, 1); G.again = false; addLog(G, s.n + ' drew a card and passed.'); }
   return true;
 }
 function doPass(G, k){
   if (G.ph !== 'play' || !G.drew) return false;
   const si = seatOf(G, k);
   if (si < 0 || si !== G.turn) return false;
-  G.drew = false; G.dn = null; G.turn = nextIdx(G, 1);
+  G.drew = false; G.dn = null; G.turn = nextIdx(G, 1); G.again = false;
   addLog(G, G.seats[si].n + ' kept the card.');
   return true;
 }
@@ -197,7 +232,7 @@ function doSkipAway(G, k, x, present){
   const t = G.seats[ti];
   if (t.bot || present(x)) return false;
   if (G.pend > 0){ drawTo(G, t, G.pend); G.pend = 0; G.pt = null; }
-  G.drew = false; G.dn = null; G.turn = nextIdx(G, 1);
+  G.drew = false; G.dn = null; G.turn = nextIdx(G, 1); G.again = false;
   addLog(G, t.n + ' is away. Turn skipped.');
   return true;
 }
@@ -208,7 +243,8 @@ function removeSeat(G, ti){
   if (G.ph === 'play'){
     if (G.seats.length < 2){
       for (const s of G.seats){ for (const c of s.hand) G.deck.unshift(c); s.hand = []; }
-      G.ph = 'lobby'; G.pend = 0; G.pt = null; G.drew = false; G.dn = null;
+      G.ph = 'lobby'; G.pend = 0; G.pt = null; G.drew = false; G.dn = null; G.deck = []; G.disc = [];
+      for (const s of G.seats) s.rdy = false;
       addLog(G, 'Not enough players. Back to the lobby.');
     } else {
       if (ti < G.turn) G.turn--;
@@ -226,6 +262,7 @@ function doLeave(G, k){
   const n = G.seats[si].n;
   removeSeat(G, si);
   addLog(G, n + ' left the table.');
+  tidy(G);
   return true;
 }
 function doKick(G, k, x, present){
@@ -236,6 +273,7 @@ function doKick(G, k, x, present){
   if (!t.bot && present(x)) return false;
   removeSeat(G, ti);
   addLog(G, t.n + (t.bot ? ' was removed.' : ' was removed for being away.'));
+  tidy(G);
   return true;
 }
 function doJoin(G, k, name, present, av){
@@ -314,10 +352,10 @@ function applyAct(G, k, name, a, present){
   const seated = seatOf(G, k) >= 0;
   switch (a.t){
     case 'join': return doJoin(G, k, name, present, a.av);
-    case 'leave': return doLeave(G, k);
+    case 'leave': return doLeave(G, k) && (maybeStart(G, present), true);
     case 'start': return seated && startRound(G);
-    case 'lobby': if (!seated || G.ph !== 'over') return false; G.ph = 'lobby'; G.win = null; return true;
-    case 'bot': return seated && addBot(G);
+    case 'ready': return doReady(G, k, a.v, present);
+    case 'bot': return seated && addBot(G) && (maybeStart(G, present), true);
     case 'rule': return seated && setRule(G, a.r, a.v);
     case 'play': return doPlay(G, k, String(a.c || ''), a.col);
     case 'draw': return doDraw(G, k);
@@ -325,7 +363,7 @@ function applyAct(G, k, name, a, present){
     case 'call': return doCall(G, k);
     case 'catch': return doCatch(G, k, String(a.x || ''));
     case 'skip': return doSkipAway(G, k, String(a.x || ''), present);
-    case 'kick': return doKick(G, k, String(a.x || ''), present);
+    case 'kick': return doKick(G, k, String(a.x || ''), present) && (maybeStart(G, present), true);
     case 'reset': return doReset(G, present);
   }
   return false;
@@ -377,7 +415,7 @@ function botCatchTarget(G){
   return {bot:bots[rint(bots.length)], t:t};
 }
 
-const api = {MAXP, AV_COUNT, COLS, CNAME, CARD_RE, BOT_NAMES, rint, shuffle, newDeck, isWild, pts, cardName, canPlay,
+const api = {MAXP, AV_COUNT, maybeStart, doReady, tidy, botChoose, COLS, CNAME, CARD_RE, BOT_NAMES, rint, shuffle, newDeck, isWild, pts, cardName, canPlay,
   newTable, newSeat, seatOf, addLog, nextIdx, ctxOf, startRound, applyAct, botMove, botCatchTarget,
   doCatch, doCall, addBot, removeSeat, doReset};
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

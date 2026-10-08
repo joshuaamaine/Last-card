@@ -99,12 +99,12 @@ function isPresent(k){
 function view(G){
   return {
     ph:G.ph, rd:G.rd,
-    seats:G.seats.map(s => ({k:s.k, n:s.n, av:s.av, h:(s.hand || []).join(''), c:!!s.called, s:s.score || 0, w:s.wins || 0, b:!!s.bot})),
+    seats:G.seats.map(s => ({k:s.k, n:s.n, av:s.av, h:(s.hand || []).join(''), c:!!s.called, s:s.score || 0, w:s.wins || 0, b:!!s.bot, r:!!s.rdy})),
     q:G.q.map(x => ({k:x.k, n:x.n, av:x.av})),
     pile:G.disc.slice(-3), pc:G.disc.length, col:COLS.indexOf(G.col) >= 0 ? G.col : 'r', dir:G.dir === -1 ? -1 : 1,
     turn:G.turn, pend:G.pend || 0, pt:G.pt, dr:!!G.drew, dn:G.dn, dk:G.deck.length,
     log:G.log.slice(-4), win:G.win, champ:G.champ, rules:{stack:!!G.rules.stack, goal:+G.rules.goal || 0},
-    lpn:G.lpn || 0, lpk:G.lpk || null
+    lpn:G.lpn || 0, lpk:G.lpk || null, again:!!G.again
   };
 }
 function mySeat(p){ return p ? p.seats.find(s => s.k === S.pid) || null : null; }
@@ -201,9 +201,19 @@ function driverRank(){
   const i = ids.indexOf(S.pid);
   return i < 0 ? ids.length : i;
 }
+let tidyT = null;
+function staleLobby(G){
+  return !!G && G.ph !== 'play' && S.mode === 'live' && S.synced && G.seats.length > 0 && !G.seats.some(s => !s.bot && isPresent(s.k));
+}
 function schedule(){
   clearTimeout(botT);
   const G = S.G;
+  if (staleLobby(G)){
+    if (!tidyT) tidyT = setTimeout(() => {
+      tidyT = null;
+      if (staleLobby(S.G) && driverRank() === 0) queue(G2 => applyAct(G2, S.pid, S.name || 'Player', {t:'reset'}, isPresent));
+    }, 10000);
+  } else if (tidyT){ clearTimeout(tidyT); tidyT = null; }
   if (!G || G.ph !== 'play'){ clearTimeout(catchT); catchKey = null; return; }
   const rank = driverRank();
   const cur = G.seats[G.turn];
@@ -283,6 +293,7 @@ function toast(msg){
 }
 
 /* ---------- rendering ---------- */
+const REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 function arcAngles(m){
   if (m === 1) return [90];
   if (m === 2) return [148, 32];
@@ -299,21 +310,23 @@ function everyoneAway(p){
 function render(){ try { renderInner(); } catch (e){ console.error(e); } }
 function renderInner(){
   const p = S.G ? view(S.G) : null;
+  if (p && p.ph === 'over') p.ph = 'lobby'; // tables saved by the earlier version
   const ms = mySeat(p);
-  const playing = !!(p && (p.ph === 'play' || p.ph === 'over'));
-  const cur = p && p.ph === 'play' ? p.seats[p.turn] : null;
+  const playing = !!(p && p.ph === 'play');
+  const cur = playing ? p.seats[p.turn] : null;
   const myTurn = !!(cur && cur.k === S.pid);
   document.title = myTurn ? '(Your turn) Last Card' : 'Last Card';
   if (myTurn && !S.wasMyTurn){ try { if (navigator.vibrate) navigator.vibrate(35); } catch (e){} }
   S.wasMyTurn = myTurn;
 
   renderNet();
-  renderCenter(p, playing, myTurn);
   const pos = renderSeats(p, ms);
+  renderCenter(p, playing, myTurn, pos);
   renderDock(p, ms, myTurn);
   renderBeam(p, cur, pos);
-  renderOver(p, ms);
+  renderWin(p);
   renderMenu(p, ms);
+  animateDraws(p, pos);
 }
 function renderNet(){
   const el = $('#net');
@@ -324,22 +337,28 @@ function renderNet(){
   else if (!S.connected) t = 'Connecting';
   el.hidden = !t; el.textContent = t;
 }
-function renderCenter(p, playing, myTurn){
+function lobbyCounts(p){
+  const here = p.seats.filter(s => !s.b && isPresent(s.k));
+  return {here:here, ready:here.filter(s => s.r), bots:p.seats.filter(s => s.b).length};
+}
+function renderCenter(p, playing, myTurn, pos){
   $('#lobbyMark').hidden = playing;
   $('#piles').hidden = !playing;
   if (!playing){
     let t = 'Pull up a chair.';
     if (S.mode === 'connecting' || !p) t = S.loadErr ? "Can't reach the table. Retrying…" : 'Setting up the table…';
-    else if (S.mode === 'practice') t = 'Practice table: you against bots on this device.';
-    else if (p.seats.length === 1) t = 'Waiting for one more player.';
-    else if (p.seats.length > 1) t = p.seats.length + ' at the table. Deal when ready.';
+    else if (p.seats.length){
+      const c = lobbyCounts(p);
+      if (c.here.length + c.bots < 2) t = 'Waiting for one more player.';
+      else t = c.ready.length + ' of ' + c.here.length + ' ready. It starts when everyone is.';
+    }
+    if (p && p.win && p.win.n && p.seats.length) t = '👑 ' + (p.win.k === S.pid ? 'You' : p.win.n) + ' won the last round. ' + t;
     $('#lobbyText').textContent = t;
     $('#caption').textContent = '';
     return;
   }
   const deck = $('#deckBtn');
-  const canDraw = myTurn && !p.dr && !S.busy;
-  deck.disabled = !canDraw;
+  deck.disabled = !(myTurn && !p.dr) || S.busy;
   deck.classList.toggle('ready', myTurn && !p.dr);
   deck.setAttribute('aria-label', p.pend && myTurn ? 'Draw ' + p.pend + ' cards' : 'Draw a card');
   $('#deckN').textContent = p.dk;
@@ -347,15 +366,26 @@ function renderCenter(p, playing, myTurn){
   pt.hidden = !p.pend; pt.textContent = '+' + p.pend;
   $('#dir').classList.toggle('rev', p.dir === -1);
 
-  if (S.lastLpn !== null && S.lastLpn !== p.lpn) S.landUntil = Date.now() + 450;
+  // The card just played flies in from whoever played it.
+  if (S.lastLpn !== null && S.lastLpn !== p.lpn){
+    S.landUntil = Date.now() + 500;
+    S.landFrom = '0px,-90px';
+    const d = $('#discard').getBoundingClientRect(), tb = $('#table').getBoundingClientRect();
+    const dcx = d.left + d.width / 2, dcy = d.top + d.height / 2;
+    let sx = null, sy = null;
+    if (p.lpk && p.lpk === S.pid){ const h = $('#hand').getBoundingClientRect(); sx = h.left + h.width / 2; sy = h.top + h.height / 2; }
+    else if (p.lpk && pos[p.lpk]){ sx = tb.left + pos[p.lpk].x; sy = tb.top + pos[p.lpk].y; }
+    if (sx !== null) S.landFrom = (sx - dcx).toFixed(0) + 'px,' + (sy - dcy).toFixed(0) + 'px';
+  }
   S.lastLpn = p.lpn;
   const landing = Date.now() < S.landUntil;
   const pile = p.pile || [];
-  const from = p.lpk && p.lpk === S.pid ? '120px' : '-90px';
+  const fxy = (S.landFrom || '0px,-90px').split(',');
   setHTML($('#discard'), 'discard', '<span class="ring" style="--cur:var(--c-' + p.col + ')"></span>' + pile.map((c, i) => {
     const idx = p.pc - pile.length + i;
     const rot = ((idx * 47) % 19) - 9;
-    return cardHTML(c, i === pile.length - 1 && landing ? 'land' : '', '--rot:' + rot + 'deg;--from:' + from);
+    const top = i === pile.length - 1 && landing;
+    return cardHTML(c, top ? 'land' : '', '--rot:' + rot + 'deg' + (top ? ';--fx:' + fxy[0] + ';--fy:' + fxy[1] : ''));
   }).join(''));
 
   // Show what just happened under the piles for a few seconds.
@@ -372,19 +402,23 @@ function renderCenter(p, playing, myTurn){
 }
 function seatHTML(s, p, ms, x, y){
   const n = s.h.length / 2;
+  const playing = p.ph === 'play';
   const cur = p.seats[p.turn];
-  const isTurn = p.ph === 'play' && cur && cur.k === s.k;
+  const isTurn = playing && cur && cur.k === s.k;
   const away = !s.b && !isPresent(s.k);
-  const catchable = p.ph === 'play' && !!ms && n === 1 && !s.c;
+  const catchable = playing && !!ms && n === 1 && !s.c;
   let bubble = '';
   if (catchable) bubble = '<span class="bubble hot">Catch!</span>';
-  else if (p.ph === 'play' && n === 1 && s.c) bubble = '<span class="bubble">Last card!</span>';
-  const backs = p.ph === 'lobby' ? '' : '<span class="mini-hand" aria-label="' + n + ' cards">' +
-    new Array(Math.min(n, 7)).fill('<i></i>').join('') + '<b>' + n + '</b></span>';
+  else if (playing && n === 1 && s.c) bubble = '<span class="bubble">Last card!</span>';
+  else if (isTurn && p.again) bubble = '<span class="bubble">Again!</span>';
+  const backs = playing ? '<span class="mini-hand" aria-label="' + n + ' cards">' +
+    new Array(Math.min(n, 7)).fill('<i></i>').join('') + '<b>' + n + '</b></span>' : '';
+  let tag = '';
+  if (away) tag = '<span class="tagline">Away</span>';
+  else if (!playing) tag = (s.b || s.r) ? '<span class="tagline ok">Ready</span>' : '<span class="tagline">Not ready</span>';
   return '<button type="button" class="seat' + (isTurn ? ' turn' : '') + (away ? ' away' : '') + '" data-seat="' + esc(s.k) +
     '" style="left:' + x.toFixed(1) + 'px;top:' + y.toFixed(1) + 'px" aria-label="' + esc(s.n) + (catchable ? ', catch them' : '') + '">' +
-    bubble + avHTML(s) + '<span class="nm">' + esc(s.n) + '</span>' + backs +
-    (away ? '<span class="tagline">Away</span>' : '') + '</button>';
+    bubble + avHTML(s) + '<span class="nm">' + esc(s.n) + '</span>' + backs + tag + '</button>';
 }
 function renderSeats(p, ms){
   const box = $('#table').getBoundingClientRect();
@@ -433,17 +467,22 @@ function renderBeam(p, cur, pos){
   beam.style.transform = 'rotate(' + ang.toFixed(1) + 'deg)';
 }
 function renderDock(p, ms, myTurn){
+  const playing = !!(p && p.ph === 'play');
   // you
   let meHTML = '';
   if (ms){
     const n = ms.h.length / 2;
     let sub = '', subCls = '';
-    if (p.ph === 'play'){
+    if (playing){
       if (myTurn){
         subCls = 'mine';
-        sub = p.pend ? 'Your turn: draw ' + p.pend + (p.rules.stack ? ' or stack' : '') : p.dr ? 'Your turn: play it or keep it' : 'Your turn';
+        sub = p.pend ? 'Your turn: draw ' + p.pend + (p.rules.stack ? ' or stack' : '') :
+          p.dr ? 'Play it or keep it' : p.again ? 'Go again!' : 'Your turn';
       } else sub = n + (n === 1 ? ' card' : ' cards');
-    } else if (p.ph === 'lobby') sub = ms.w ? ms.w + (ms.w === 1 ? ' win' : ' wins') : 'Seated';
+    } else {
+      sub = ms.r ? 'Ready' : 'Not ready';
+      subCls = ms.r ? 'mine' : '';
+    }
     meHTML = avHTML(ms, 'button', ' type="button" id="meAv" aria-label="Change your face"') +
       '<span class="who"><b>' + esc(ms.n) + '</b><span class="' + subCls + '">' + esc(sub) + '</span></span>';
   }
@@ -454,58 +493,64 @@ function renderDock(p, ms, myTurn){
   // join form for people without a seat
   const queued = !!(p && p.q.some(x => x.k === S.pid));
   const away = everyoneAway(p);
-  const showJoin = !!p && !ms && !queued && !(away && p.ph === 'play');
+  const showJoin = !!p && !ms && !queued && !(away && playing);
   $('#joinForm').hidden = !showJoin;
   if (showJoin){
     const nm = cleanName($('#nameInput').value);
     const back = rejoinSeat(p, nm);
-    $('#joinBtn').textContent = back ? 'Rejoin as ' + back.n : p.ph === 'play' ? 'Join next round' : 'Sit down';
+    $('#joinBtn').textContent = back ? 'Rejoin as ' + back.n : playing ? 'Join next round' : 'Sit down';
     $('#joinText').textContent = back ? 'Your seat is waiting with your cards.' :
-      p.ph === 'play' ? 'A round is going. Sit down and you\'re in the next one.' : 'Pick a face and a name to sit down.';
+      playing ? "A round is going. Sit down and you're in the next one." : 'Pick a face and a name to sit down.';
     renderAvPick($('#avPick'), S.av);
   }
 
   // buttons
   let ah = '';
-  if (p && p.ph === 'lobby' && ms){
-    if (p.seats.length < 2) ah += '<span class="hint">Invite friends or add a bot to start.</span>';
-    ah += '<button type="button" class="btn" data-act="bot"' + (p.seats.length >= MAXP ? ' disabled' : '') + '>Add a bot</button>';
-    ah += '<button type="button" class="btn go" data-act="start"' + (p.seats.length < 2 ? ' disabled' : '') + '>Deal</button>';
-  } else if (p && p.ph === 'play'){
+  if (p && !playing && ms){
+    const c = lobbyCounts(p);
+    const waiting = c.here.filter(s => !s.r && s.k !== S.pid).map(s => s.n);
+    let hint = '';
+    if (c.here.length + c.bots < 2) hint = 'Invite friends or add a bot to play.';
+    else if (ms.r) hint = waiting.length ? 'Waiting for ' + waiting.slice(0, 3).join(', ') + (waiting.length > 3 ? ' and ' + (waiting.length - 3) + ' more' : '') : 'Shuffling…';
+    if (hint) ah += '<span class="hint">' + esc(hint) + '</span>';
+    ah += '<button type="button" class="btn" data-act="bot"' + (p.seats.length >= MAXP || S.busy ? ' disabled' : '') + '>Add a bot</button>';
+    ah += ms.r ? '<button type="button" class="btn on" data-act="ready" data-v="0">Ready ✓</button>'
+               : '<button type="button" class="btn go" data-act="ready" data-v="1"' + (S.busy ? ' disabled' : '') + '>Ready</button>';
+  } else if (playing){
     if (!ms){
       if (away) ah += '<span class="hint">Everyone at this table has left.</span><button type="button" class="btn go" data-act="reset">Clear the table</button>';
-      else if (queued) ah += '<span class="hint">You\'re in next round. Watching for now.</span>';
+      else if (queued) ah += "<span class=\"hint\">You're in next round. Watching for now.</span>";
     } else {
       const n = ms.h.length / 2;
       if (myTurn && p.dr) ah += '<button type="button" class="btn" data-act="pass"' + (S.busy ? ' disabled' : '') + '>Keep it</button>';
       const canCall = !ms.c && (n === 1 || (n === 2 && myTurn));
       if (canCall) ah += '<button type="button" class="btn call' + (n === 1 ? ' urgent' : '') + '" data-act="call">Last card!</button>';
     }
-  } else if (p && p.ph === 'lobby' && !ms && away){
-    ah += '<button type="button" class="btn" data-act="reset">Clear the old table</button>';
   }
   setHTML($('#actions'), 'actions', ah);
 
   // your hand
-  const handStr = ms ? ms.h : '';
+  const handStr = ms && playing ? ms.h : '';
   const rd = p ? p.rd : null;
   if (handStr !== S.lastHandStr || rd !== S.lastRd){
     const mine = sortHand(decode(handStr));
-    let mask = mine.map(() => false);
+    let mask = mine.map(() => false), kind = 'draw';
     if (S.lastHandStr !== null){
-      if (rd !== S.lastRd) mask = mine.map(() => true);
+      if (rd !== S.lastRd){ mask = mine.map(() => true); kind = 'deal'; }
       else {
         const m = {};
         decode(S.lastHandStr).forEach(c => { m[c] = (m[c] || 0) + 1; });
         mine.forEach((c, i) => { if (m[c]) m[c]--; else mask[i] = true; });
       }
     }
-    S.handCards = mine; S.freshMask = mask;
-    S.freshUntil = Date.now() + 700 + mine.length * 50;
+    S.handCards = mine; S.freshMask = mask; S.freshKind = kind;
+    S.freshUntil = Date.now() + 900 + mine.length * 50;
+    clearTimeout(S.freshT);
+    S.freshT = setTimeout(() => { memo.hand = null; render(); }, 1500 + mine.length * 50);
     S.lastHandStr = handStr; S.lastRd = rd;
   }
   const handEl = $('#hand');
-  if (!ms || !p || p.ph === 'lobby' || !S.handCards.length){ setHTML(handEl, 'hand', ''); return; }
+  if (!ms || !playing || !S.handCards.length){ setHTML(handEl, 'hand', ''); return; }
   const fresh = Date.now() < S.freshUntil;
   const ctx = ctxPub(p);
   const n = S.handCards.length;
@@ -518,27 +563,77 @@ function renderDock(p, ms, myTurn){
   setHTML(handEl, 'hand', S.handCards.map((c, i) => {
     const ok = myTurn && canPlay(c, ctx) && (!p.dr || c === p.dn);
     const isNew = fresh && S.freshMask[i];
+    const cls = isNew ? (S.freshKind === 'deal' || REDUCED ? ' dealt' : ' incoming') : '';
     const st = (i ? 'margin-left:' + (step - cw).toFixed(1) + 'px;' : '') + (isNew ? '--d:' + (k++ * 45) + 'ms' : '');
-    return '<button type="button" class="card-btn' + (ok ? ' ok' : '') + (myTurn && !ok ? ' dim' : '') + (isNew ? ' dealt' : '') +
+    return '<button type="button" class="card-btn' + (ok ? ' ok' : '') + (myTurn && !ok ? ' dim' : '') + cls +
       '" data-c="' + c + '"' + (st ? ' style="' + st + '"' : '') + ' aria-label="' + esc(cardName(c)) + (ok ? ', playable' : '') + '">' + cardHTML(c) + '</button>';
   }).join(''));
 }
 function renderAvPick(el, sel){
   setHTML(el, el.id, AV.map((f, i) => '<button type="button" data-av="' + i + '" aria-pressed="' + (i === sel) + '" aria-label="Face ' + (i + 1) + '">' + f + '</button>').join(''));
 }
-function renderOver(p, ms){
-  const show = !!(p && p.ph === 'over');
-  $('#over').hidden = !show;
-  if (!show) return;
-  const w = p.win ? p.seats.find(s => s.k === p.win.k) : null;
-  setHTML($('#overAv'), 'overAv', w ? avHTML(w) : '');
-  $('#overTitle').textContent = w ? (w.k === S.pid ? 'You win!' : w.n + ' wins!') : 'Round over';
-  $('#overSub').textContent = w ? '+1 win · ' + w.w + (w.w === 1 ? ' win' : ' wins') + ' total' : 'The round ended early.';
+/* Winner splash: shown when a round ends while you're watching, then the table goes back to the lobby. */
+let winT = null;
+function renderWin(p){
+  if (!p) return;
+  const rd = p.win && p.win.rd ? p.win.rd : null;
+  if (S.lastWinRd === undefined){ S.lastWinRd = rd; return; }
+  if (rd === S.lastWinRd) return;
+  S.lastWinRd = rd;
+  if (!rd || !p.win.n) return;
+  const w = p.win;
+  setHTML($('#overAv'), 'overAv', avHTML({k:w.k, av:w.av, b:w.b, w:w.w}));
+  $('#overTitle').textContent = w.k === S.pid ? 'You win!' : w.n + ' wins!';
+  $('#overSub').textContent = 'Round ' + rd + (w.b ? '' : ' · ' + w.w + (w.w === 1 ? ' win' : ' wins') + ' total');
   setHTML($('#standings'), 'standings', p.seats.slice().sort((a, b) => b.w - a.w)
     .map(s => '<span>' + esc(s.k === S.pid ? 'You' : s.n) + ' <b>' + s.w + '</b></span>').join(''));
-  const nb = $('#nextBtn');
-  nb.hidden = !ms;
-  nb.disabled = !ms || p.seats.length < 2 || S.busy;
+  $('#over').hidden = false;
+  clearTimeout(winT);
+  winT = setTimeout(() => { $('#over').hidden = true; }, 5000);
+}
+/* Cards fly from the deck to whoever drew them: into your hand, or to another player's seat. */
+function fly(from, to, o){
+  const w = from.width, h = from.height;
+  const el = document.createElement('span');
+  el.className = 'card back flyer';
+  el.innerHTML = '<span class="logo">Last<br>Card</span>';
+  el.style.cssText = '--w:' + w + 'px;left:' + from.left + 'px;top:' + from.top + 'px';
+  document.body.appendChild(el);
+  const dx = to.left + to.width / 2 - (from.left + w / 2), dy = to.top + to.height / 2 - (from.top + h / 2);
+  const sc = o.scale || Math.max(.2, to.width / w);
+  const done = () => { el.remove(); if (o.done) o.done(); };
+  if (!el.animate){ done(); return; }
+  const a = el.animate([
+    {transform:'translate(0,0) scale(1) rotate(0deg)', opacity:1},
+    {transform:'translate(' + dx + 'px,' + dy + 'px) scale(' + sc + ') rotate(' + (o.rot || 10) + 'deg)', opacity:o.fade ? .2 : 1}
+  ], {duration:440, delay:o.delay || 0, easing:'cubic-bezier(.25,.8,.25,1)', fill:'both'});
+  a.onfinish = done; a.oncancel = done;
+}
+function animateDraws(p, pos){
+  const playing = !!(p && p.ph === 'play');
+  const counts = {};
+  if (playing) for (const s of p.seats) counts[s.k] = s.h.length / 2;
+  const prev = S.prevCounts, prevRd = S.prevRd;
+  S.prevCounts = counts; S.prevRd = p ? p.rd : null;
+  const reveal = () => document.querySelectorAll('#hand .incoming').forEach(b => b.classList.remove('incoming'));
+  if (!playing || !prev || prevRd !== p.rd || REDUCED){ reveal(); return; }
+  const top = $('#deckBtn .deck-stack .card:last-child');
+  if (!top){ reveal(); return; }
+  const from = top.getBoundingClientRect();
+  const tb = $('#table').getBoundingClientRect();
+  for (const s of p.seats){
+    const before = prev[s.k], now = counts[s.k];
+    if (before === undefined || now <= before) continue;
+    if (s.k === S.pid){
+      Array.from(document.querySelectorAll('#hand .incoming')).forEach((b, i) => {
+        fly(from, b.getBoundingClientRect(), {delay:i * 150, done:() => b.classList.remove('incoming')});
+      });
+    } else if (pos[s.k]){
+      const target = {left:tb.left + pos[s.k].x - 12, top:tb.top + pos[s.k].y - 18, width:24, height:36};
+      for (let i = 0; i < Math.min(now - before, 6); i++) fly(from, target, {delay:i * 150, scale:.3, fade:true, rot:-8});
+    }
+  }
+  setTimeout(reveal, 1600);
 }
 function renderMenu(p, ms){
   const playing = !!(p && p.ph === 'play');
@@ -636,11 +731,12 @@ function wire(){
   $('#faceClose').addEventListener('click', closeSheets);
   $('#pickCancel').addEventListener('click', closeSheets);
   $('#deckBtn').addEventListener('click', () => act('draw'));
-  $('#nextBtn').addEventListener('click', () => act('start'));
+  $('#nextBtn').addEventListener('click', () => { $('#over').hidden = true; });
   document.querySelectorAll('[data-col]').forEach(b => b.addEventListener('click', () => {
     const c = S.pickCard; closeSheets();
     if (c) act('play', {c:c, col:b.dataset.col});
   }));
+  $('#over').addEventListener('click', e => { if (e.target.id === 'over') $('#over').hidden = true; });
   ['menu', 'seatSheet', 'faceSheet', 'picker', 'help'].forEach(id => $('#' + id).addEventListener('click', e => {
     if (e.target.id === id) closeSheets();
   }));
@@ -668,6 +764,7 @@ function wire(){
     if (b.dataset.act){
       const t = b.dataset.act;
       if (t === 'pass' && S.busy) return;
+      if (t === 'ready') return act('ready', {v:b.dataset.v === '1'});
       return act(t);
     }
     if (b.dataset.c && b.closest('#hand')) return onHandTap(b, b.dataset.c);

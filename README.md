@@ -9,7 +9,8 @@ Friends open the link, type a name, take a seat and play. No accounts, no app. T
 - **Tables:** the plain link is table `main`. `?t=anything` (letters, numbers, dashes) is a separate table, and the lobby's "Start a private table" makes a random one. A table stays put between visits.
 - **Players:** each browser gets a random player id saved on that device, so reopening the link puts you back in your seat. On a new phone or browser, sitting down with the same name takes your old seat back (cards and wins included) as long as that seat's player isn't online. Everyone picks a face; wins show as a badge on it.
 - **Saving moves:** every player's browser keeps a copy of the table, applies a move with the rules in `engine.js`, and saves it through the Supabase function `lc_save`. The save only goes through if nobody else saved first; otherwise the browser reloads the table and tries the move again. Supabase Realtime pushes each save to everyone at the table, and the page also re-checks every few seconds.
-- **Bots:** run by one browser at the table (the online player with the lowest id). If that browser goes quiet, the others take over after a few seconds.
+- **Rounds:** everyone taps Ready in the lobby; the round starts when every player who's here is ready (players who left lose their seat). When someone wins, the table goes back to the lobby, bots leave, and everyone readies up again. A lobby whose players have all left clears itself after a few seconds.
+- **Bots:** added from the lobby for one round at a time. They're run by one browser at the table (the online player with the lowest id). If that browser goes quiet, the others take over after a few seconds.
 - **Honor system:** the whole table, including everyone's cards, is readable by anyone at the table with browser dev tools. Fine for friends.
 
 ## Files
