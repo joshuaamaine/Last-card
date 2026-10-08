@@ -142,6 +142,10 @@ function table(hands, top, extra){
   if (E.applyAct(G, 'p1', 'P1', {t:'play', c:'r6'}, everyone)) throw new Error('jumped in with a different card');
   if (!E.applyAct(G, 'p1', 'P1', {t:'play', c:'r5'}, everyone)) throw new Error('jump-in failed');
   if (G.turn !== 2) throw new Error('turn after jump-in should pass from the jumper');
+  // ...but nobody can jump in on their own card
+  const D = table([['g4','g4','b1'], ['r1','r2']], 'r4');
+  E.applyAct(D, 'p0', 'P0', {t:'play', c:'g4'}, everyone);
+  if (E.applyAct(D, 'p0', 'P0', {t:'play', c:'g4'}, everyone)) throw new Error('jumped in on own card');
 }
 {
   // Turn timer: the player draws and the turn moves on

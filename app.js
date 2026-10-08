@@ -124,7 +124,7 @@ function mySeat(p){ return p ? p.seats.find(s => s.k === S.pid) || null : null; 
 function ctxPub(p){ const pile = p.pile || []; return {top:pile[pile.length - 1] || 'r0', color:p.col, pend:p.pend, pt:p.pt}; }
 function topCard(p){ const pile = p.pile || []; return pile[pile.length - 1] || ''; }
 function jumpable(p, ms, c, myTurn){
-  return !!ms && p.ph === 'play' && !myTurn && p.rules.jump && !p.pend && !ms.o && !isWild(c) && c === topCard(p);
+  return !!ms && p.ph === 'play' && !myTurn && p.rules.jump && !p.pend && !ms.o && !isWild(c) && c === topCard(p) && p.lpk !== S.pid;
 }
 /* When the current turn began, by this device's clock. Used for the 15-second countdown. */
 function turnSig(p){ return p && p.ph === 'play' ? [p.rd, p.turn, p.lpn, p.dr ? 1 : 0, p.pend, p.log[p.log.length - 1] || ''].join('|') : ''; }
@@ -726,6 +726,8 @@ function renderMenu(p, ms){
 function onHandTap(btn, c){
   const p = S.G ? view(S.G) : null, ms = mySeat(p);
   if (!ms || p.ph !== 'play') return;
+  if (Date.now() < (S.tapLock || 0)) return; // one card per tap: ignore fast double taps
+  S.tapLock = Date.now() + 650;
   const cur = p.seats[p.turn];
   const myTurn = !!cur && cur.k === S.pid;
   if (!myTurn && jumpable(p, ms, c, false)){ act('play', {c:c}); return; }

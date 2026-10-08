@@ -215,7 +215,7 @@ function doPlay(G, k, card, col, x){
   s.hand.splice(hi, 1);
   G.disc.push(card);
   G.col = isWild(card) ? col : card[0];
-  G.drew = false; G.dn = null; G.lpk = k; G.lpn++; G.fx = null;
+  G.drew = false; G.dn = null; G.lpk = k; G.lpn++; G.fx = null; G.dry = 0;
   let msg = s.n + ' played ' + cardName(card);
   if (isWild(card)) msg += ' and picked ' + CNAME[col];
   const two = active(G).length === 2;
@@ -279,7 +279,19 @@ function doDraw(G, k){
   }
   if (G.drew) return false;
   const got = drawTo(G, s, 1);
-  if (!got){ G.turn = nextIdx(G, 1); G.again = false; addLog(G, s.n + ' passed. No cards left to draw.'); return true; }
+  if (!got){
+    // Every card is in someone's hand. If nobody can play a full lap in a row, fewest cards wins.
+    G.dry = (G.dry || 0) + 1;
+    addLog(G, s.n + ' passed. No cards left to draw.');
+    if (G.dry >= active(G).length){
+      const act = active(G), low = act.reduce((m, o) => o.hand.length < m.hand.length ? o : m, act[0]);
+      addLog(G, 'Nobody can play. Fewest cards wins.');
+      endRound(G, G.seats.indexOf(low));
+      return true;
+    }
+    G.turn = nextIdx(G, 1); G.again = false;
+    return true;
+  }
   if (mercyOut(G, si)) return true;
   const c = s.hand[s.hand.length - 1];
   if (canPlay(c, ctxOf(G))){ G.drew = true; G.dn = c; addLog(G, s.n + ' drew a card.'); }
@@ -484,6 +496,7 @@ function canJump(G, si, card){
   if (G.ph !== 'play' || !ruleOn(G, 'jump') || G.pend > 0 || si === G.turn) return false;
   const s = G.seats[si];
   if (!s || s.out || isWild(card)) return false;
+  if (G.lpk === s.k) return false; // no jumping in on your own card
   return card === G.disc[G.disc.length - 1] && s.hand.indexOf(card) >= 0;
 }
 function applyAct(G, k, name, a, present){
