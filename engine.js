@@ -8,6 +8,7 @@ const COLS = ['r','y','g','b'];
 const CNAME = {r:'Red', y:'Yellow', g:'Green', b:'Blue'};
 const CARD_RE = /^(?:[rygb][0-9SRD]|w[WF])$/;
 const BOT_NAMES = ['Pixel','Clank','Nova','Dot','Gizmo','Bolt','Echo','Juno'];
+const AV_COUNT = 16; /* avatars are picked by number; the page maps numbers to pictures */
 
 function rint(n){
   if (typeof crypto !== 'undefined' && crypto.getRandomValues){ const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; }
@@ -39,7 +40,11 @@ function newTable(){
   return {v:0, ph:'lobby', rd:0, seats:[], q:[], deck:[], disc:[], turn:0, dir:1, col:'r', pend:0, pt:null,
     drew:false, dn:null, rules:{stack:false, goal:0}, log:[], win:null, champ:null, lpk:null, lpn:0, bots:0};
 }
-function newSeat(k, n, bot){ return {k:k, n:n, bot:!!bot, hand:[], called:false, score:0, wins:0}; }
+function validAv(v){ v = Number(v); return Number.isInteger(v) && v >= 0 && v < AV_COUNT ? v : null; }
+function newSeat(k, n, bot, av){
+  const a = validAv(av);
+  return {k:k, n:n, bot:!!bot, av:a === null ? rint(AV_COUNT) : a, hand:[], called:false, score:0, wins:0};
+}
 function seatOf(G, k){ for (let i = 0; i < G.seats.length; i++) if (G.seats[i].k === k) return i; return -1; }
 function addLog(G, m){ G.log.push(m); if (G.log.length > 6) G.log.splice(0, G.log.length - 6); }
 function uniqueName(G, k, name){
@@ -68,7 +73,7 @@ function ctxOf(G){ return {top:G.disc[G.disc.length - 1], color:G.col, pend:G.pe
 
 function startRound(G){
   if (G.ph === 'play') return false;
-  for (const x of G.q){ if (seatOf(G, x.k) < 0 && G.seats.length < MAXP) G.seats.push(newSeat(x.k, x.n, false)); }
+  for (const x of G.q){ if (seatOf(G, x.k) < 0 && G.seats.length < MAXP) G.seats.push(newSeat(x.k, x.n, false, x.av)); }
   G.q = [];
   if (G.seats.length < 2) return false;
   if (G.champ){ for (const s of G.seats){ s.score = 0; s.wins = 0; } G.champ = null; G.rd = 0; }
@@ -233,24 +238,49 @@ function doKick(G, k, x, present){
   addLog(G, t.n + (t.bot ? ' was removed.' : ' was removed for being away.'));
   return true;
 }
-function doJoin(G, k, name){
+function doJoin(G, k, name, present, av){
+  const avv = validAv(av);
   const si = seatOf(G, k);
   if (si >= 0){
+    const s = G.seats[si];
+    let ch = false;
     const nn = uniqueName(G, k, name);
-    if (G.seats[si].n !== nn){ G.seats[si].n = nn; return true; }
-    return false;
+    if (s.n !== nn){ s.n = nn; ch = true; }
+    if (avv !== null && s.av !== avv){ s.av = avv; ch = true; }
+    return ch;
+  }
+  // Same name as a seat whose player isn't here (new phone, new browser): take that seat back.
+  const key = name.toLowerCase();
+  const ri = G.seats.findIndex(s => !s.bot && s.n.toLowerCase() === key && !present(s.k));
+  if (ri >= 0){
+    const s = G.seats[ri], old = s.k;
+    s.k = k;
+    if (avv !== null) s.av = avv;
+    G.q = G.q.filter(x => x.k !== k);
+    if (G.win && G.win.k === old) G.win.k = k;
+    if (G.champ === old) G.champ = k;
+    if (G.lpk === old) G.lpk = k;
+    addLog(G, s.n + ' is back.');
+    return true;
+  }
+  const qi = G.q.findIndex(x => x.k === k);
+  if (qi >= 0){
+    const q = G.q[qi], nn = uniqueName(G, k, name);
+    let ch = false;
+    if (q.n !== nn){ q.n = nn; ch = true; }
+    if (avv !== null && q.av !== avv){ q.av = avv; ch = true; }
+    return ch;
   }
   if (G.ph === 'play'){
-    if (G.q.some(x => x.k === k)) return false;
     if (G.seats.length + G.q.length >= MAXP) return false;
     const nn = uniqueName(G, k, name);
-    G.q.push({k:k, n:nn});
+    G.q.push({k:k, n:nn, av:avv === null ? rint(AV_COUNT) : avv});
     addLog(G, nn + ' will join next round.');
     return true;
   }
   if (G.seats.length >= MAXP) return false;
   const nn = uniqueName(G, k, name);
-  G.seats.push(newSeat(k, nn, false));
+  G.seats.push(newSeat(k, nn, false, avv));
   addLog(G, nn + ' sat down.');
   return true;
 }
@@ -283,7 +313,7 @@ function applyAct(G, k, name, a, present){
   if (!a || typeof a.t !== 'string') return false;
   const seated = seatOf(G, k) >= 0;
   switch (a.t){
-    case 'join': return doJoin(G, k, name);
+    case 'join': return doJoin(G, k, name, present, a.av);
     case 'leave': return doLeave(G, k);
     case 'start': return seated && startRound(G);
     case 'lobby': if (!seated || G.ph !== 'over') return false; G.ph = 'lobby'; G.win = null; return true;
@@ -347,7 +377,7 @@ function botCatchTarget(G){
   return {bot:bots[rint(bots.length)], t:t};
 }
 
-const api = {MAXP, COLS, CNAME, CARD_RE, BOT_NAMES, rint, shuffle, newDeck, isWild, pts, cardName, canPlay,
+const api = {MAXP, AV_COUNT, COLS, CNAME, CARD_RE, BOT_NAMES, rint, shuffle, newDeck, isWild, pts, cardName, canPlay,
   newTable, newSeat, seatOf, addLog, nextIdx, ctxOf, startRound, applyAct, botMove, botCatchTarget,
   doCatch, doCall, addBot, removeSeat, doReset};
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

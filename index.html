@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Last Card</title>
 <meta name="description" content="A card game for friends. Match the color or the number, empty your hand first, and call your last card before somebody catches you.">
-<meta name="theme-color" content="#E4E8EE" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0F1218" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0A3A26">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Last Card">
 <meta property="og:description" content="Pull up a chair. Match colors and numbers, and call your last card before somebody catches you.">
@@ -19,6 +18,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Last Card">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,86 +27,100 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="app" class="in-lobby">
-  <header class="top">
-    <div class="brand"><span class="mark" aria-hidden="true"></span><span class="brand-name">Last Card</span></div>
-    <div class="chips">
-      <span class="chip" id="roundChip" hidden></span>
-      <span class="chip" id="netChip"><i class="dot" id="netDot"></i><span id="netText">Connecting</span></span>
-      <button class="icon-btn" id="helpBtn" type="button" aria-label="How to play">?</button>
-    </div>
+<main class="table" id="table">
+  <header class="bar">
+    <button class="round-btn" id="menuBtn" type="button" aria-label="Menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <div class="title">Last Card <span class="net" id="net" hidden></span></div>
+    <button class="round-btn" id="inviteBtn" type="button" aria-label="Invite friends">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M19 8v6M16 11h6"/></svg>
+    </button>
   </header>
 
-  <div id="lobby" class="lobby">
-    <section class="hero">
-      <div>
-        <h1 class="wordmark">Last<br><span>Card</span></h1>
-        <p class="lede">Match the color or the number, empty your hand first, and call your last card before somebody catches you.</p>
-      </div>
-      <div class="fan" id="fan" aria-hidden="true"></div>
-    </section>
-    <p class="note" id="lobbyNote">Connecting to the table…</p>
-    <section class="panel">
-      <label for="nameInput">Your name</label>
-      <div class="row">
-        <input type="text" id="nameInput" maxlength="16" autocomplete="nickname" placeholder="What friends call you">
-        <button class="btn primary" id="seatBtn" type="button" disabled>Take a seat</button>
-      </div>
-    </section>
-    <section class="panel">
-      <div class="panel-head"><h2>At the table</h2><span class="count" id="seatCount">0 of 8 seats</span></div>
-      <ul class="seats" id="seatList"><li class="seat empty">No one is seated yet.</li></ul>
-      <div class="row">
-        <button class="btn" id="botBtn" type="button" disabled>Add a bot</button>
-        <button class="btn primary grow" id="dealBtn" type="button" disabled>Deal cards</button>
-      </div>
-      <p class="fine" id="watchNote"></p>
-      <button class="btn" id="resetBtn" type="button" hidden>Clear the table</button>
-    </section>
-    <section class="panel">
-      <h2>House rules</h2>
-      <label class="toggle" for="stackRule"><input type="checkbox" id="stackRule" disabled><span>Stack +2 and +4 cards<small>Hit with a +2? Answer with your own +2 or a +4 and pass the whole pile to the next player.</small></span></label>
-      <div class="field">
-        <label for="goalRule">Play to</label>
-        <select id="goalRule" disabled>
-          <option value="0">No limit, just keep score</option>
-          <option value="250">250 points</option>
-          <option value="500">500 points</option>
-        </select>
-      </div>
-    </section>
-    <section class="panel quiet">
-      <h2>Invite friends</h2>
-      <p>Send them this link. No account or app needed, and the table stays put between games.</p>
-      <div class="linkbox"><code id="shareUrl"></code><button class="btn" id="shareBtn" type="button">Share link</button></div>
-      <p class="fine">You're at table <span class="table-code" id="tableCode">main</span>. Want a separate game? <button class="textlink" id="newTableBtn" type="button">Start a private table</button></p>
-    </section>
-  </div>
+  <div class="beam" id="beam" hidden></div>
+  <section class="seats" id="seats" aria-label="Players"></section>
 
-  <div id="game" class="game" hidden>
-    <section class="opps" id="opps" aria-label="Other players"></section>
-    <section class="table" aria-label="Table">
-      <div class="piles">
-        <button class="deck-btn" id="deckBtn" type="button" aria-label="Draw a card" disabled>
-          <span class="deck-stack"><span class="card back"><span class="logo">Last<br>Card</span></span><span class="card back"><span class="logo">Last<br>Card</span></span></span>
-          <span class="pile-n" id="deckN">0</span>
-        </button>
-        <div class="discard" id="discard"></div>
+  <section class="center" id="center">
+    <div class="lobby-mark" id="lobbyMark">
+      <div class="fan" id="fan" aria-hidden="true"></div>
+      <h1>Last Card</h1>
+      <p id="lobbyText">Pull up a chair.</p>
+    </div>
+    <div class="piles" id="piles" hidden>
+      <svg class="dir" id="dir" viewBox="0 0 200 200" aria-hidden="true" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M40 62 A78 78 0 0 1 150 44"/><path d="M140 34 L152 45 L137 51"/>
+        <path d="M160 138 A78 78 0 0 1 50 156"/><path d="M60 166 L48 155 L63 149"/>
+      </svg>
+      <button class="deck" id="deckBtn" type="button" aria-label="Draw a card" disabled>
+        <span class="deck-stack" aria-hidden="true">
+          <span class="card back"><span class="logo">Last<br>Card</span></span>
+          <span class="card back"><span class="logo">Last<br>Card</span></span>
+          <span class="card back"><span class="logo">Last<br>Card</span></span>
+        </span>
+        <span class="count" id="deckN">0</span>
+        <span class="pend" id="pendTag" hidden></span>
+      </button>
+      <div class="discard" id="discard"></div>
+    </div>
+    <p class="caption" id="caption" aria-live="polite"></p>
+  </section>
+
+  <section class="dock" id="dock">
+    <div class="me-row" id="meRow"></div>
+    <div class="actions" id="actions"></div>
+    <form class="join" id="joinForm" hidden>
+      <p id="joinText">Pick a face and a name to sit down.</p>
+      <div class="av-pick" id="avPick" role="group" aria-label="Pick your face"></div>
+      <div class="join-row">
+        <input type="text" id="nameInput" maxlength="16" autocomplete="nickname" placeholder="Your name" aria-label="Your name">
+        <button class="btn go" id="joinBtn" type="submit">Sit down</button>
       </div>
-      <div class="status" id="status"></div>
-    </section>
-    <section class="log" id="log" aria-live="polite"></section>
-    <section class="dock">
-      <div class="actions" id="actions"></div>
-      <div class="hand" id="hand" aria-label="Your hand"></div>
-    </section>
+    </form>
+    <div class="hand" id="hand" aria-label="Your hand"></div>
+  </section>
+</main>
+
+<div class="sheet" id="menu" hidden>
+  <div class="sheet-card" role="dialog" aria-modal="true" aria-label="Menu">
+    <div class="menu-list" id="menuList">
+      <button type="button" id="mInvite">Invite friends <small>Share the link</small></button>
+      <button type="button" id="mRules">How to play</button>
+      <label for="stackRule">
+        <span>Stack +2 and +4<small id="stackNote">Pass a +2 or +4 along with your own</small></span>
+        <span class="switch"><input type="checkbox" id="stackRule"><span></span></span>
+      </label>
+      <button type="button" id="mBot">Add a bot</button>
+      <button type="button" id="mFace">Change your face</button>
+      <button type="button" id="mLeave" class="danger">Leave the table</button>
+      <button type="button" id="mReset" class="danger">Clear the table <small>Everyone here has left</small></button>
+      <button type="button" id="mNew">Start a private table <small>A new link just for your group</small></button>
+    </div>
+    <p class="status-line" id="statusLine"></p>
+    <button type="button" class="btn" id="menuClose">Close</button>
+  </div>
+</div>
+
+<div class="sheet" id="seatSheet" hidden>
+  <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="seatTitle">
+    <h2 id="seatTitle">Player</h2>
+    <p id="seatSub"></p>
+    <div class="menu-list" id="seatActions"></div>
+    <button type="button" class="btn" id="seatClose">Close</button>
+  </div>
+</div>
+
+<div class="sheet" id="faceSheet" hidden>
+  <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="faceTitle">
+    <h2 id="faceTitle">Pick your face</h2>
+    <div class="av-pick" id="facePick"></div>
+    <button type="button" class="btn" id="faceClose">Done</button>
   </div>
 </div>
 
 <div class="sheet" id="picker" hidden>
   <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="pickTitle">
-    <span class="eyebrow">Wild card</span>
-    <h2 id="pickTitle">Pick the next color</h2>
+    <h2 id="pickTitle">Pick a color</h2>
     <div class="colors">
       <button type="button" class="colbtn c-r" data-col="r"><i class="suit s-r"></i>Red</button>
       <button type="button" class="colbtn c-y" data-col="y"><i class="suit s-y"></i>Yellow</button>
@@ -117,33 +131,31 @@
   </div>
 </div>
 
-<div class="sheet" id="over" hidden>
-  <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="overTitle">
-    <span class="eyebrow" id="overEyebrow">Round over</span>
+<div class="sheet middle" id="over" hidden>
+  <div class="sheet-card win-card" role="dialog" aria-modal="true" aria-labelledby="overTitle">
+    <div class="crown" aria-hidden="true">👑</div>
+    <div id="overAv"></div>
     <h2 id="overTitle">Round over</h2>
     <p id="overSub"></p>
-    <div class="scores-wrap"><table class="scores" id="scores"></table></div>
+    <div class="standings" id="standings"></div>
     <div class="row">
-      <button type="button" class="btn primary grow" id="nextBtn">Deal next round</button>
-      <button type="button" class="btn" id="lobbyBtn">Change seats</button>
+      <button type="button" class="btn go" id="nextBtn">Play again</button>
     </div>
   </div>
 </div>
 
 <div class="sheet" id="help" hidden>
   <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
-    <span class="eyebrow">How to play</span>
-    <h2 id="helpTitle">Last Card rules</h2>
+    <h2 id="helpTitle">How to play</h2>
     <ul class="rules">
-      <li>Everyone gets <b>7 cards</b>. On your turn, play one card that matches the top card by <b>color, number or symbol</b>. Wilds go on anything.</li>
-      <li>Can't play, or don't want to? <b>Draw one</b>. If it fits, you can play it right away or keep it.</li>
-      <li><b>Skip</b> jumps the next player. <b>Reverse</b> flips the order; with two players it means you go again. <b>+2</b> makes the next player draw two and miss their turn.</li>
-      <li><b>Wild</b> lets you pick the color. <b>Wild +4</b> picks the color and makes the next player draw four. It can be played any time here.</li>
-      <li>Down to two cards on your turn? Tap <b>Last card!</b>. Anyone can <b>catch</b> a player sitting on one card who didn't call it. Getting caught costs two cards.</li>
-      <li>Empty your hand to win the round. You score the cards left in other hands: numbers at face value, action cards 20, wilds 50.</li>
-      <li>Each card color also has its own shape (circle, triangle, square, diamond), so colors are easy to tell apart.</li>
+      <li>Everyone gets <b>7 cards</b>. On your turn, play a card that matches the top card by <b>color, number or symbol</b>. Wilds go on anything.</li>
+      <li>Can't play? <b>Tap the deck</b> to draw. If the new card fits, you can play it or keep it.</li>
+      <li><b>Skip</b> jumps the next player. <b>Reverse</b> flips the order (with two players, you go again). <b>+2</b> makes the next player draw two and miss a turn.</li>
+      <li><b>Wild</b> picks the color. <b>Wild +4</b> picks the color and the next player draws four.</li>
+      <li>Down to two cards on your turn? Tap <b>Last card!</b> If someone forgets, tap their face to <b>catch</b> them for two cards.</li>
+      <li>First to empty their hand wins the round. Wins show on your face.</li>
     </ul>
-    <button type="button" class="btn primary" id="helpClose">Got it</button>
+    <button type="button" class="btn go" id="helpClose">Got it</button>
   </div>
 </div>
 
