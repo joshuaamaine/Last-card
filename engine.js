@@ -96,12 +96,8 @@ function takeCard(G){
   if (!G.deck.length){
     if (G.disc.length <= 1) return null;
     const top = G.disc.pop();
-    // +10s are one-off surprises: played ones leave the game instead of going back in the deck
-    const keep = G.disc.filter(c => c !== 'wT');
-    G.made = (G.made || 0) - (G.disc.length - keep.length);
-    G.deck = shuffle(keep);
+    G.deck = shuffle(G.disc);
     G.disc = [top];
-    if (!G.deck.length) return null;
   }
   let c = G.deck.pop();
   if (ruleOn(G, 'ten') && rint(100) === 0){ G.deck.unshift(c); c = 'wT'; G.made = (G.made || 0) + 1; }
@@ -198,19 +194,6 @@ function shuffleHands(G, from){
   let j = idx.indexOf(from);
   for (const c of all){ j = (j + 1) % idx.length; G.seats[idx[j]].hand.push(c); }
 }
-/* Hit with a draw stack and nothing to stack on it? The cards are dealt to you and the turn moves on. */
-function autoTake(G){
-  let guard = 0;
-  while (G.ph === 'play' && G.pend > 0 && guard++ < 16){
-    const si = G.turn, s = G.seats[si];
-    if (s.hand.some(c => canPlay(c, ctxOf(G)))) return;
-    const got = drawTo(G, s, G.pend);
-    G.pend = 0; G.pt = null; G.drew = false; G.dn = null;
-    addLog(G, s.n + ' takes ' + got + '.');
-    if (mercyOut(G, si)) return;
-    G.turn = nextIdx(G, 1);
-  }
-}
 function doPlay(G, k, card, col, x){
   if (G.ph !== 'play') return false;
   const si = seatOf(G, k);
@@ -273,12 +256,10 @@ function doPlay(G, k, card, col, x){
   } else {
     G.turn = nextIdx(G, 1);
   }
+  G.again = G.turn === si;
+  if (G.again && s.hand.length) msg += '. ' + s.n + ' goes again';
   addLog(G, msg + '.');
   if (!s.hand.length){ endRound(G, si); return true; }
-  if (G.pend > 0) autoTake(G);
-  if (G.ph !== 'play') return true;
-  G.again = G.turn === si;
-  if (G.again) addLog(G, s.n + ' goes again.');
   const empty = G.seats.findIndex(o => !o.out && !o.hand.length);
   if (empty >= 0) endRound(G, empty);
   return true;
@@ -388,7 +369,6 @@ function removeSeat(G, ti){
   const L = G.seats.length;
   G.turn = ((G.turn % L) + L) % L;
   if (G.seats[G.turn].out) G.turn = nextIdx(G, 1);
-  if (G.pend > 0) autoTake(G);
 }
 /* Start the round once every player at the table is ready (bots always are).
    Players who aren't here anymore lose their seat so they can't stall the game. */

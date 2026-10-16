@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Last Card</title>
 <meta name="description" content="A card game for friends. Match the color or the number, empty your hand first, and call your last card before somebody catches you.">
-<meta name="theme-color" content="#7E1A1C">
+<meta name="theme-color" content="#0A3A26">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Last Card">
 <meta property="og:description" content="Pull up a chair. Match colors and numbers, and call your last card before somebody catches you.">
@@ -27,83 +27,66 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main class="table is-lobby" id="table">
-  <button class="round-btn tl" id="helpBtn" type="button" aria-label="How to play">?</button>
-  <span class="net" id="net" hidden></span>
-  <button class="round-btn tr" id="menuBtn" type="button" aria-label="Menu">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
-  </button>
+<main class="table" id="table">
+  <header class="bar">
+    <button class="round-btn" id="menuBtn" type="button" aria-label="Menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <div class="title">Last Card <span class="net" id="net" hidden></span></div>
+    <button class="round-btn" id="inviteBtn" type="button" aria-label="Invite friends">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M19 8v6M16 11h6"/></svg>
+    </button>
+  </header>
 
-  <!-- the game -->
-  <section class="game-view" id="gameView" hidden>
-    <div class="arena" id="arena">
-      <div class="beam" id="beam" hidden></div>
-      <section class="seats" id="seats" aria-label="Players"></section>
-      <section class="center" id="center">
-        <div class="piles" id="piles">
-          <svg class="dir" id="dir" viewBox="0 0 200 200" aria-hidden="true" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M40 62 A78 78 0 0 1 150 44"/><path d="M140 34 L152 45 L137 51"/>
-            <path d="M160 138 A78 78 0 0 1 50 156"/><path d="M60 166 L48 155 L63 149"/>
-          </svg>
-          <button class="deck" id="deckBtn" type="button" aria-label="Draw a card" disabled>
-            <span class="deck-stack" aria-hidden="true">
-              <span class="card back"><span class="logo">Last<br>Card</span></span>
-              <span class="card back"><span class="logo">Last<br>Card</span></span>
-              <span class="card back"><span class="logo">Last<br>Card</span></span>
-            </span>
-            <span class="pend" id="pendTag" hidden></span>
-          </button>
-          <div class="discard" id="discard"></div>
-        </div>
-        <p class="caption" id="caption" aria-live="polite"></p>
-      </section>
-      <div class="fx" id="fx" hidden aria-hidden="true"></div>
+  <div class="beam" id="beam" hidden></div>
+  <section class="seats" id="seats" aria-label="Players"></section>
+
+  <section class="center" id="center">
+    <div class="lobby-mark" id="lobbyMark">
+      <div class="fan" id="fan" aria-hidden="true"></div>
+      <h1>Last Card</h1>
+      <p id="lobbyText">Pull up a chair.</p>
     </div>
-    <section class="dock" id="dock">
-      <div class="me" id="me">
-        <div class="me-side" id="meL"></div>
-        <div class="me-mid" id="meMid"></div>
-        <div class="me-side" id="meR"></div>
-      </div>
-      <div class="hand" id="hand" aria-label="Your hand"></div>
-    </section>
+    <div class="piles" id="piles" hidden>
+      <svg class="dir" id="dir" viewBox="0 0 200 200" aria-hidden="true" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M40 62 A78 78 0 0 1 150 44"/><path d="M140 34 L152 45 L137 51"/>
+        <path d="M160 138 A78 78 0 0 1 50 156"/><path d="M60 166 L48 155 L63 149"/>
+      </svg>
+      <button class="deck" id="deckBtn" type="button" aria-label="Draw a card" disabled>
+        <span class="deck-stack" aria-hidden="true">
+          <span class="card back"><span class="logo">Last<br>Card</span></span>
+          <span class="card back"><span class="logo">Last<br>Card</span></span>
+          <span class="card back"><span class="logo">Last<br>Card</span></span>
+        </span>
+        <span class="count" id="deckN">0</span>
+        <span class="pend" id="pendTag" hidden></span>
+      </button>
+      <div class="discard" id="discard"></div>
+    </div>
+    <p class="caption" id="caption" aria-live="polite"></p>
+    <div class="fx" id="fx" hidden aria-hidden="true"></div>
   </section>
 
-  <!-- between rounds -->
-  <section class="ready-view" id="readyView">
-    <ul class="roster" id="roster" aria-label="Players"></ul>
-    <div class="ready-foot" id="readyFoot">
-      <p class="ready-hint" id="readyHint"></p>
-      <button type="button" class="big-btn" id="readyBtn">Ready</button>
-      <div class="sub-row" id="subRow">
-        <button type="button" class="text-btn" data-act="bot" id="botBtn">+ Bot</button>
-        <button type="button" class="text-btn" id="inviteBtn">Invite</button>
-        <button type="button" class="text-btn" data-act="leave">Leave</button>
+  <section class="dock" id="dock">
+    <div class="me-row" id="meRow"></div>
+    <div class="actions" id="actions"></div>
+    <form class="join" id="joinForm" hidden>
+      <p id="joinText">Pick a face and a name to sit down.</p>
+      <div class="av-pick" id="avPick" role="group" aria-label="Pick your face"></div>
+      <div class="join-row">
+        <input type="text" id="nameInput" maxlength="16" autocomplete="nickname" placeholder="Your name" aria-label="Your name">
+        <button class="btn go" id="joinBtn" type="submit">Sit down</button>
       </div>
-    </div>
+    </form>
+    <div class="hand" id="hand" aria-label="Your hand"></div>
   </section>
-
-  <!-- sit down -->
-  <form class="join" id="joinForm" hidden>
-    <h1 class="join-title" id="joinTitle">Last Card</h1>
-    <div class="av-pick" id="avPick" role="group" aria-label="Pick your face"></div>
-    <input type="text" id="nameInput" maxlength="16" autocomplete="nickname" placeholder="Your name" aria-label="Your name">
-    <button class="big-btn" id="joinBtn" type="submit">Join</button>
-    <button class="text-btn dark" type="button" data-act="reset" id="joinReset" hidden>Clear the old table</button>
-  </form>
-  <p class="queued" id="queued" hidden>You're in next round</p>
-
-  <!-- chat -->
-  <div class="chat-log" id="chatLog" hidden></div>
-  <form class="chat" id="chatForm" autocomplete="off">
-    <input type="text" id="chatInput" maxlength="120" placeholder="Chat" aria-label="Chat" enterkeyhint="send">
-  </form>
 </main>
 
 <div class="sheet" id="menu" hidden>
   <div class="sheet-card" role="dialog" aria-modal="true" aria-label="Menu">
     <div class="menu-list" id="menuList">
       <button type="button" id="mInvite">Invite friends <small>Share the link</small></button>
+      <button type="button" id="mRules">How to play</button>
       <button type="button" id="mBot">Add a bot</button>
       <button type="button" id="mFace">Change your face</button>
       <button type="button" id="mLeave" class="danger">Leave the table</button>
@@ -157,11 +140,16 @@
   </div>
 </div>
 
-<div class="win" id="over" hidden>
-  <div class="win-card" role="dialog" aria-modal="true" aria-labelledby="overTitle">
-    <div class="crown-big" aria-hidden="true">👑</div>
+<div class="sheet middle" id="over" hidden>
+  <div class="sheet-card win-card" role="dialog" aria-modal="true" aria-labelledby="overTitle">
+    <div class="crown" aria-hidden="true">👑</div>
     <div id="overAv"></div>
     <h2 id="overTitle">Round over</h2>
+    <p id="overSub"></p>
+    <div class="standings" id="standings"></div>
+    <div class="row">
+      <button type="button" class="btn go" id="nextBtn">Back to the table</button>
+    </div>
   </div>
 </div>
 
@@ -171,14 +159,16 @@
     <ul class="rules">
       <li>Everyone gets <b>7 cards</b>. On your turn, play a card that matches the top card by <b>color, number or symbol</b>. Wilds go on anything.</li>
       <li>Can't play? <b>Tap the deck</b> to draw. If the new card fits, you can play it or keep it.</li>
-      <li><b>Skip</b> jumps the next player. <b>Reverse</b> flips the order (with two players, you go again).</li>
-      <li><b>Stacking:</b> hit with a draw card? Answer with one the same size or bigger (+2 on +2, +4 on +2 or +4, +10 on anything) and the pile moves on. Nothing to stack? You take the cards automatically.</li>
+      <li><b>Skip</b> jumps the next player. <b>Reverse</b> flips the order (with two players, you go again). <b>+2</b> makes the next player draw two and miss a turn.</li>
+      <li><b>Wild</b> picks the color. <b>Wild +4</b> picks the color and the next player draws four.</li>
+      <li><b>Stacking:</b> hit with a draw card? Answer with one the same size or bigger (+2 on +2, +4 on +2 or +4, +10 on anything) and the whole pile moves on. Can't stack? Tap the deck and take it all.</li>
       <li><b>Legendary</b> (gold star): play it on its color and every card of that color in your hand goes with it.</li>
       <li><b>Magic 7:</b> swap hands with anyone you pick. <b>Spin 0:</b> everyone passes their hand along. <b>Shuffle Hands:</b> every card gets mixed and dealt back out.</li>
       <li><b>Wild +10</b> turns up on about 1 in 100 cards. <b>Jump-in:</b> hold the exact same card as the top card? Play it any time.</li>
       <li>You get <b>15 seconds</b> a turn, then you draw. Reach <b>20 cards</b> and you're out of the round.</li>
-      <li>Down to two cards on your turn? Tap <b>Last card!</b> If someone forgets, tap their face to <b>catch</b> them for two cards.</li>
-      <li>First to empty their hand wins and gets a medal. Everyone taps <b>Ready</b> for the next round.</li>
+      <li>Down to two cards on your turn? Tap <b>Last card!</b> If someone forgets, tap their face to <b>catch</b> them for two cards. Tap anyone's face to send a reaction.</li>
+      <li>With two players, Skip and Reverse mean you <b>go again</b>.</li>
+      <li>First to empty their hand wins. Everyone heads back to the lobby, and the next round starts when everyone taps <b>Ready</b>. Wins show on your face.</li>
     </ul>
     <button type="button" class="btn go" id="helpClose">Got it</button>
   </div>
