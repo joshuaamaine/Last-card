@@ -40,6 +40,7 @@ button{cursor:pointer}
 .bar{position:absolute;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:6;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px}
 .round-btn{width:42px;height:42px;flex:none;border-radius:50%;border:0;background:rgba(255,255,255,.92);color:var(--ink);display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.28)}
 .round-btn svg{width:20px;height:20px}
+.round-btn.help{font-size:22px;font-weight:700}
 .title{font-family:var(--f-display);font-weight:900;font-size:20px;letter-spacing:.06em;text-transform:uppercase;color:var(--chalk-soft);display:flex;align-items:center;gap:8px}
 .title .net{font-family:var(--f-body);font-size:11px;font-weight:700;letter-spacing:.05em;padding:3px 8px;border-radius:999px;background:rgba(0,0,0,.28);color:var(--chalk)}
 
@@ -265,3 +266,18 @@ button{cursor:pointer}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
+
+/* ---------- chat ---------- */
+.chat{width:100%;max-width:640px;margin-top:4px}
+.chat input{display:block;width:100%;height:40px;padding:0 16px;border-radius:999px;border:0;background:rgba(0,0,0,.28);color:var(--chalk);font-size:16px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.chat input::placeholder{color:rgba(255,255,255,.5)}
+.chat-log{width:100%;max-width:640px;max-height:34vh;overflow-y:auto;padding:10px 12px;border-radius:16px;background:rgba(5,30,18,.88);display:flex;flex-direction:column;gap:4px;font-size:14px}
+.chat-log p{margin:0;overflow-wrap:anywhere}
+.chat-log b{color:var(--gold)}
+.chat-log .empty{color:var(--chalk-soft)}
+.say{position:fixed;z-index:12;max-width:min(70vw,280px);padding:7px 13px;border-radius:14px;background:var(--paper);color:var(--ink);font-weight:700;font-size:14px;line-height:1.25;overflow-wrap:anywhere;
+  box-shadow:0 3px 10px rgba(0,0,0,.3);pointer-events:none;animation:sayin .2s ease-out}
+.say::after{content:"";position:absolute;top:100%;left:var(--tail,50%);transform:translateX(-50%);border:7px solid transparent;border-top-color:var(--paper)}
+.say.below::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:var(--paper)}
+.say.fade{opacity:0;transition:opacity .4s}
+@keyframes sayin{from{opacity:0;transform:translateY(6px) scale(.95)}}

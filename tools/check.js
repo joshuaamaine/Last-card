@@ -118,16 +118,22 @@ function table(hands, top, extra){
   if (G.seats[1].hand.join() !== 'r1' || G.seats[2].hand.join() !== 'g1' || G.seats[0].hand.join() !== 'y1,y2') throw new Error('spin wrong ' + JSON.stringify(G.seats.map(x => x.hand)));
 }
 {
-  // Stacking: +2 on +2, +4 on +2, +10 on anything, +2 not on +4; the last player draws it all
+  // Stacking: +2 on +2, +4 on +2, +10 on anything, +2 not on +4. Whoever can't stack takes it all automatically.
   const G = table([['rD','r1'], ['gD','b1'], ['wF','y1'], ['wT','g1']], 'r3');
   E.applyAct(G, 'p0', 'P0', {t:'play', c:'rD'}, everyone);
   E.applyAct(G, 'p1', 'P1', {t:'play', c:'gD'}, everyone);
   E.applyAct(G, 'p2', 'P2', {t:'play', c:'wF', col:'b'}, everyone);
   if (E.canPlay('rD', E.ctxOf(G))) throw new Error('+2 stacked on +4');
   E.applyAct(G, 'p3', 'P3', {t:'play', c:'wT', col:'b'}, everyone);
-  if (G.pend !== 18) throw new Error('stack total ' + G.pend);
-  E.applyAct(G, 'p0', 'P0', {t:'draw'}, everyone);
-  if (G.seats[0].hand.length !== 1 + 18 || G.turn !== 1) throw new Error('stack draw wrong');
+  if (G.pend !== 0 || G.seats[0].hand.length !== 1 + 18 || G.turn !== 1) throw new Error('stack not taken automatically');
+  // Two players: hit with +2 and nothing to stack, the cards come automatically and the player goes again
+  const T = table([['rD','r1','r2'], ['g5','b1']], 'r3');
+  E.applyAct(T, 'p0', 'P0', {t:'play', c:'rD'}, everyone);
+  if (T.seats[1].hand.length !== 4 || T.turn !== 0 || !T.again) throw new Error('auto-take with two players wrong');
+  // Holding a card that stacks, it's your choice: nothing is taken automatically
+  const C = table([['rD','r1'], ['gD','b1']], 'r3');
+  E.applyAct(C, 'p0', 'P0', {t:'play', c:'rD'}, everyone);
+  if (C.pend !== 2 || C.turn !== 1 || C.seats[1].hand.length !== 2) throw new Error('took cards when a stack was possible');
 }
 {
   // Mercy: reaching 20 cards puts you out; last one standing wins

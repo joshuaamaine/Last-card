@@ -29,12 +29,10 @@
 <body>
 <main class="table" id="table">
   <header class="bar">
+    <button class="round-btn help" id="helpBtn" type="button" aria-label="How to play">?</button>
+    <div class="title">Last Card <span class="net" id="net" hidden></span></div>
     <button class="round-btn" id="menuBtn" type="button" aria-label="Menu">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-    </button>
-    <div class="title">Last Card <span class="net" id="net" hidden></span></div>
-    <button class="round-btn" id="inviteBtn" type="button" aria-label="Invite friends">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M19 8v6M16 11h6"/></svg>
     </button>
   </header>
 
@@ -79,6 +77,10 @@
       </div>
     </form>
     <div class="hand" id="hand" aria-label="Your hand"></div>
+    <div class="chat-log" id="chatLog" hidden></div>
+    <form class="chat" id="chatForm" autocomplete="off">
+      <input type="text" id="chatInput" maxlength="120" placeholder="Chat" aria-label="Chat" enterkeyhint="send">
+    </form>
   </section>
 </main>
 
@@ -161,12 +163,12 @@
       <li>Can't play? <b>Tap the deck</b> to draw. If the new card fits, you can play it or keep it.</li>
       <li><b>Skip</b> jumps the next player. <b>Reverse</b> flips the order (with two players, you go again). <b>+2</b> makes the next player draw two and miss a turn.</li>
       <li><b>Wild</b> picks the color. <b>Wild +4</b> picks the color and the next player draws four.</li>
-      <li><b>Stacking:</b> hit with a draw card? Answer with one the same size or bigger (+2 on +2, +4 on +2 or +4, +10 on anything) and the whole pile moves on. Can't stack? Tap the deck and take it all.</li>
+      <li><b>Stacking:</b> hit with a draw card? Answer with one the same size or bigger (+2 on +2, +4 on +2 or +4, +10 on anything) and the whole pile moves on. Nothing to stack? You take the cards automatically.</li>
       <li><b>Legendary</b> (gold star): play it on its color and every card of that color in your hand goes with it.</li>
       <li><b>Magic 7:</b> swap hands with anyone you pick. <b>Spin 0:</b> everyone passes their hand along. <b>Shuffle Hands:</b> every card gets mixed and dealt back out.</li>
       <li><b>Wild +10</b> turns up on about 1 in 100 cards. <b>Jump-in:</b> hold the exact same card as the top card? Play it any time.</li>
       <li>You get <b>15 seconds</b> a turn, then you draw. Reach <b>20 cards</b> and you're out of the round.</li>
-      <li>Down to two cards on your turn? Tap <b>Last card!</b> If someone forgets, tap their face to <b>catch</b> them for two cards. Tap anyone's face to send a reaction.</li>
+      <li>Down to two cards on your turn? Tap <b>Last card!</b> If someone forgets, tap their face to <b>catch</b> them for two cards. Tap anyone's face to send a reaction, or use the chat bar.</li>
       <li>With two players, Skip and Reverse mean you <b>go again</b>.</li>
       <li>First to empty their hand wins. Everyone heads back to the lobby, and the next round starts when everyone taps <b>Ready</b>. Wins show on your face.</li>
     </ul>

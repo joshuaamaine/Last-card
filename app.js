@@ -14,6 +14,9 @@ const CONFIGURED = typeof CFG.url === 'string' && /^https:\/\/\S+$/.test(CFG.url
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
 const ESC = {'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'};
+const INVISIBLE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g;
+function cleanChat(s){ return String(s == null ? '' : s).replace(INVISIBLE, '').replace(/\s+/g, ' ').trim().slice(0, 120); }
+function cssq(k){ return window.CSS && CSS.escape ? CSS.escape(k) : String(k).replace(/["\\]/g, '\\$&'); }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ESC[c]); }
 function cleanName(s){
   return String(s == null ? '' : s)
@@ -275,6 +278,12 @@ function connect(){
     if (n && validG(n.state)) adopt({version:n.version, state:n.state}, false);
     else refresh();
   });
+  ch.on('broadcast', {event:'chat'}, msg => {
+    const d = msg && msg.payload;
+    if (!d || typeof d.f !== 'string' || typeof d.m !== 'string') return;
+    const m = cleanChat(d.m);
+    if (m) addChat(d.f.slice(0, 40), m);
+  });
   ch.on('broadcast', {event:'react'}, msg => {
     const d = msg && msg.payload;
     if (d && typeof d.t === 'string' && Number.isInteger(d.e)) showReaction(d.t, d.e);
@@ -340,7 +349,13 @@ function everyoneAway(p){
   if (!p.seats.length && !p.q.length) return false;
   return !p.seats.some(s => !s.b && isPresent(s.k));
 }
-function render(){ try { renderInner(); } catch (e){ console.error(e); } }
+function render(){
+  try {
+    const playing = !!(S.G && S.G.ph === 'play');
+    if (S.lastPlaying !== playing){ S.lastPlaying = playing; for (const k in saying){ saying[k].remove(); delete saying[k]; } }
+    renderInner();
+  } catch (e){ console.error(e); }
+}
 function renderInner(){
   const p = S.G ? view(S.G) : null;
   if (p && p.ph === 'over') p.ph = 'lobby'; // tables saved by the earlier version
@@ -568,6 +583,7 @@ function renderDock(p, ms, myTurn){
     else if (ms.r) hint = waiting.length ? 'Waiting for ' + waiting.slice(0, 3).join(', ') + (waiting.length > 3 ? ' and ' + (waiting.length - 3) + ' more' : '') : 'Shuffling…';
     if (hint) ah += '<span class="hint">' + esc(hint) + '</span>';
     ah += '<button type="button" class="btn" data-act="bot"' + (p.seats.length >= MAXP || S.busy ? ' disabled' : '') + '>Add a bot</button>';
+    ah += '<button type="button" class="btn" id="lobbyInvite">Invite</button>';
     ah += ms.r ? '<button type="button" class="btn on" data-act="ready" data-v="0">Ready ✓</button>'
                : '<button type="button" class="btn go" data-act="ready" data-v="1"' + (S.busy ? ' disabled' : '') + '>Ready</button>';
   } else if (playing){
@@ -758,6 +774,73 @@ function sendReaction(k, e){
   showReaction(k, e);
   if (ch) ch.send({type:'broadcast', event:'react', payload:{f:S.pid, t:k, e:e}}).catch(() => {});
 }
+/* ---------- chat ---------- */
+const chatLog = [];
+const saying = {};
+let lastChat = 0;
+function nameFor(k){
+  const G = S.G;
+  const s = G && (G.seats.find(x => x.k === k) || G.q.find(x => x.k === k));
+  if (s) return s.n;
+  const m = S.online.get(k);
+  return (m && cleanName(m.name)) || (k === S.pid ? (S.name || 'You') : 'Someone');
+}
+function avAnchor(k){
+  if (k === S.pid) return $('#meRow .av');
+  return document.querySelector('.seat[data-seat="' + cssq(k) + '"] .av');
+}
+function addChat(k, m){
+  chatLog.push({n:nameFor(k), m:m});
+  if (chatLog.length > 40) chatLog.shift();
+  renderChatLog();
+  showSay(k, m);
+}
+function renderChatLog(){
+  const box = $('#chatLog');
+  box.textContent = '';
+  if (!chatLog.length){
+    const e = document.createElement('p'); e.className = 'empty'; e.textContent = 'Say something to the table.'; box.appendChild(e);
+    return;
+  }
+  chatLog.slice(-12).forEach(x => {
+    const line = document.createElement('p');
+    const b = document.createElement('b'); b.textContent = x.n + ' ';
+    line.appendChild(b); line.appendChild(document.createTextNode(x.m));
+    box.appendChild(line);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+function showSay(k, m){
+  const anchor = avAnchor(k);
+  if (!anchor) return;
+  if (saying[k]) saying[k].remove();
+  const el = document.createElement('div');
+  el.className = 'say';
+  el.textContent = m;
+  document.body.appendChild(el);
+  saying[k] = el;
+  const r = anchor.getBoundingClientRect();
+  const w = el.offsetWidth, h = el.offsetHeight;
+  const ax = r.left + r.width / 2;
+  const left = clamp(ax - w / 2, 8, window.innerWidth - w - 8);
+  let top = r.top - h - 10;
+  if (top < 64){ top = r.bottom + 10; el.classList.add('below'); }
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+  el.style.setProperty('--tail', clamp(ax - left, 14, w - 14) + 'px');
+  setTimeout(() => el.classList.add('fade'), 4200);
+  setTimeout(() => { el.remove(); if (saying[k] === el) delete saying[k]; }, 4700);
+}
+function sendChat(e){
+  e.preventDefault();
+  const input = $('#chatInput');
+  const m = cleanChat(input.value);
+  if (!m || Date.now() - lastChat < 700) return;
+  lastChat = Date.now();
+  input.value = '';
+  addChat(S.pid, m);
+  if (ch) ch.send({type:'broadcast', event:'chat', payload:{f:S.pid, m:m}}).catch(() => {});
+}
 function showReaction(k, e){
   const face = REACTS[e];
   if (!face) return;
@@ -824,7 +907,12 @@ function wire(){
   $('#joinForm').addEventListener('submit', joinSubmit);
   $('#menuBtn').addEventListener('click', () => { render(); $('#menu').hidden = false; });
   $('#menuClose').addEventListener('click', closeSheets);
-  $('#inviteBtn').addEventListener('click', share);
+  $('#helpBtn').addEventListener('click', () => { $('#help').hidden = false; });
+  $('#chatForm').addEventListener('submit', sendChat);
+  const ci = $('#chatInput');
+  let chatHide = null;
+  ci.addEventListener('focus', () => { clearTimeout(chatHide); renderChatLog(); $('#chatLog').hidden = false; });
+  ci.addEventListener('blur', () => { chatHide = setTimeout(() => { $('#chatLog').hidden = true; }, 200); });
   $('#mInvite').addEventListener('click', () => { closeSheets(); share(); });
   $('#mRules').addEventListener('click', () => { closeSheets(); $('#help').hidden = false; });
   $('#mBot').addEventListener('click', () => { closeSheets(); act('bot'); });
@@ -877,6 +965,7 @@ function wire(){
       closeSheets();
       return act(b.dataset.sa, {x:k});
     }
+    if (b.id === 'lobbyInvite') return share();
     if (b.dataset.seat !== undefined) return onSeatTap(b.dataset.seat);
     if (b.id === 'meAv') return openFace();
     if (b.dataset.act){
