@@ -354,7 +354,18 @@ function everyoneAway(p){
   if (!p.seats.length && !p.q.length) return false;
   return !p.seats.some(s => !s.b && isPresent(s.k));
 }
-function render(){ try { renderInner(); } catch (e){ console.error(e); } }
+/* Card sizes follow the screen: wide enough to read, short enough that everything fits. */
+function setSizes(){
+  const W = window.innerWidth, H = window.innerHeight;
+  if (S.sizedFor === W + 'x' + H) return;
+  S.sizedFor = W + 'x' + H;
+  S.handW = Math.round(clamp(Math.min(W * 0.18, H * 0.105), 54, 96));
+  S.pileW = Math.round(clamp(Math.min(W * 0.19, H * 0.11), 58, 106));
+  document.documentElement.style.setProperty('--hand-w', S.handW + 'px');
+  document.documentElement.style.setProperty('--pile-w', S.pileW + 'px');
+  memo.seats = null; memo.hand = null;
+}
+function render(){ try { setSizes(); renderInner(); } catch (e){ console.error(e); } }
 function renderInner(){
   const p = S.G ? view(S.G) : null;
   const ms = mySeat(p);
@@ -466,7 +477,7 @@ function renderCenter(p, myTurn, pos){
   if (S.lastLpn !== null && S.lastLpn !== p.lpn){
     S.landUntil = Date.now() + 500;
     S.landFrom = '0px,-90px';
-    const d = $('#discard').getBoundingClientRect(), tb = $('#table').getBoundingClientRect();
+    const d = $('#discard').getBoundingClientRect(), tb = $('#arena').getBoundingClientRect();
     const dcx = d.left + d.width / 2, dcy = d.top + d.height / 2;
     let sx = null, sy = null;
     if (p.lpk && p.lpk === S.pid){ const h = $('#hand').getBoundingClientRect(); sx = h.left + h.width / 2; sy = h.top + h.height / 2; }
@@ -515,31 +526,40 @@ function seatHTML(s, p, ms, x, y){
     bubble + avHTML(s, {timerMs:timer, crown:champ(p, s.k)}) + '<span class="nm outline">' + esc(s.n) + '</span>' + fan + tag + '</button>';
 }
 function renderSeats(p, ms){
-  const box = $('#table').getBoundingClientRect();
+  const arena = $('#arena');
+  const box = arena.getBoundingClientRect();
   const W = box.width, H = box.height;
   const pos = {};
   const L = p.seats.length;
   const myIdx = p.seats.findIndex(s => s.k === S.pid);
   const others = myIdx >= 0 ? p.seats.map((_, i) => p.seats[(myIdx + 1 + i) % L]).slice(0, -1) : p.seats.slice();
   const angles = arcAngles(others.length);
-  const cy = H * 0.45, rx = Math.min(W * 0.4, 300), ry = H * 0.29;
-  const topMin = $('#helpBtn').getBoundingClientRect().bottom - box.top + 44;
+  const crowded = others.length >= 6;
+  const half = crowded ? 42 : 50;
+  const cy = Math.max(H * 0.5, H - S.pileW * 0.74 - 34);
+  arena.style.setProperty('--pile-y', cy.toFixed(0) + 'px');
+  const rx = Math.min(W * 0.39, 330), ry = Math.max(cy - half, 40);
   const html = others.map((s, i) => {
     const a = angles[i] * Math.PI / 180;
-    const x = clamp(W / 2 + rx * Math.cos(a), 50, W - 50);
-    const y = Math.max(cy - ry * Math.sin(a), topMin);
+    let x = clamp(W / 2 + rx * Math.cos(a), 50, W - 50);
+    const y = Math.max(cy - ry * Math.sin(a), half);
+    // keep side seats clear of the piles when they sit level with them
+    const clearX = S.pileW * 1.15 + 50;
+    if (Math.abs(y - cy) < S.pileW * 0.74 + half && Math.abs(x - W / 2) < clearX && Math.abs(x - W / 2) > 4){
+      x = clamp(W / 2 + Math.sign(x - W / 2) * clearX, 46, W - 46);
+    }
     pos[s.k] = {x:x, y:y};
     return seatHTML(s, p, ms, x, y);
   }).join('');
   const el = $('#seats');
-  el.classList.toggle('crowded', others.length >= 6);
+  el.classList.toggle('crowded', crowded);
   setHTML(el, 'seats', html);
   return pos;
 }
 function renderBeam(p, cur, pos){
   const beam = $('#beam');
   if (!cur){ beam.hidden = true; return; }
-  const box = $('#table').getBoundingClientRect();
+  const box = $('#arena').getBoundingClientRect();
   const pr = $('#piles').getBoundingClientRect();
   const cx = pr.left + pr.width / 2 - box.left, cy = pr.top + pr.height / 2 - box.top;
   let tx, ty;
@@ -569,11 +589,13 @@ function renderMe(p, ms, myTurn){
   const n = ms.h.length / 2;
   let note = '';
   if (ms.o) note = 'Out this round';
-  else if (myTurn) note = p.pend ? 'Stack it, or tap the deck to take ' + p.pend : p.dr ? 'Play it or keep it' : p.again ? 'Go again!' : 'Your turn';
+  else if (myTurn) note = p.pend ? 'Stack or tap the deck' : p.dr ? 'Play it or keep it' : p.again ? 'Go again!' : '';
+  else if (n === 1 && ms.c) note = 'Last card!';
   $('#meMid').dataset.k = S.pid;
-  setHTML($('#meMid'), 'meMid', avHTML(ms, {tag:'button', attrs:' type="button" id="meAv" aria-label="Change your face"',
+  setHTML($('#meMid'), 'meMid', (note ? '<span class="bubble mine">' + esc(note) + '</span>' : '') +
+    avHTML(ms, {tag:'button', attrs:' type="button" id="meAv" aria-label="Change your face"',
     timerMs:myTurn && p.rules.timer ? turnElapsed() : undefined, crown:champ(p, ms.k)}) +
-    '<span class="name-pill">' + esc(ms.n) + '</span>' + (note ? '<span class="me-note">' + esc(note) + '</span>' : ''));
+    '<span class="name-pill">' + esc(ms.n) + '</span>');
   setHTML($('#meL'), 'meL', myTurn && p.dr ? '<button type="button" class="pill-btn" data-act="pass"' + (S.busy ? ' disabled' : '') + '>Keep it</button>' : '');
   const canCall = !ms.c && !ms.o && (n === 1 || (n === 2 && myTurn));
   setHTML($('#meR'), 'meR', canCall ? '<button type="button" class="pill-btn call' + (n === 1 ? ' urgent' : '') + '" data-act="call">Last card!</button>' : '');
@@ -605,9 +627,9 @@ function renderMe(p, ms, myTurn){
   const fresh = Date.now() < S.freshUntil;
   const ctx = ctxPub(p);
   const cnt = S.handCards.length;
-  const cw = window.innerWidth >= 560 ? 80 : (window.innerHeight <= 700 ? 58 : 70);
+  const cw = S.handW;
   const avail = Math.max(200, handEl.clientWidth - 12);
-  const step = cnt > 1 ? Math.max(22, Math.min(cw * 0.72, (avail - cw) / (cnt - 1))) : cw;
+  const step = cnt > 1 ? Math.max(cw * 0.3, Math.min(cw * 0.74, (avail - cw) / (cnt - 1))) : cw;
   handEl.style.justifyContent = cw + step * (cnt - 1) > avail ? 'flex-start' : 'center';
   let k = 0;
   setHTML(handEl, 'hand', S.handCards.map((c, i) => {
@@ -685,7 +707,7 @@ function animateDraws(p, pos){
   const top = $('#deckBtn .deck-stack .card:last-child');
   if (!top){ reveal(); return; }
   const from = top.getBoundingClientRect();
-  const tb = $('#table').getBoundingClientRect();
+  const tb = $('#arena').getBoundingClientRect();
   for (const s of p.seats){
     const before = prev[s.k], now = counts[s.k];
     if (before === undefined || now <= before) continue;
@@ -963,7 +985,7 @@ function wire(){
     if (S.mode === 'live') refresh();
   });
   let rt = null;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { memo.seats = null; memo.hand = null; render(); }, 120); });
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(render, 120); });
 }
 
 /* ---------- startup ---------- */

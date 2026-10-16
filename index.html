@@ -36,27 +36,29 @@
 
   <!-- the game -->
   <section class="game-view" id="gameView" hidden>
-    <div class="beam" id="beam" hidden></div>
-    <section class="seats" id="seats" aria-label="Players"></section>
-    <section class="center" id="center">
-      <div class="piles" id="piles">
-        <svg class="dir" id="dir" viewBox="0 0 200 200" aria-hidden="true" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M40 62 A78 78 0 0 1 150 44"/><path d="M140 34 L152 45 L137 51"/>
-          <path d="M160 138 A78 78 0 0 1 50 156"/><path d="M60 166 L48 155 L63 149"/>
-        </svg>
-        <button class="deck" id="deckBtn" type="button" aria-label="Draw a card" disabled>
-          <span class="deck-stack" aria-hidden="true">
-            <span class="card back"><span class="logo">Last<br>Card</span></span>
-            <span class="card back"><span class="logo">Last<br>Card</span></span>
-            <span class="card back"><span class="logo">Last<br>Card</span></span>
-          </span>
-          <span class="pend" id="pendTag" hidden></span>
-        </button>
-        <div class="discard" id="discard"></div>
-      </div>
-      <p class="caption" id="caption" aria-live="polite"></p>
+    <div class="arena" id="arena">
+      <div class="beam" id="beam" hidden></div>
+      <section class="seats" id="seats" aria-label="Players"></section>
+      <section class="center" id="center">
+        <div class="piles" id="piles">
+          <svg class="dir" id="dir" viewBox="0 0 200 200" aria-hidden="true" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M40 62 A78 78 0 0 1 150 44"/><path d="M140 34 L152 45 L137 51"/>
+            <path d="M160 138 A78 78 0 0 1 50 156"/><path d="M60 166 L48 155 L63 149"/>
+          </svg>
+          <button class="deck" id="deckBtn" type="button" aria-label="Draw a card" disabled>
+            <span class="deck-stack" aria-hidden="true">
+              <span class="card back"><span class="logo">Last<br>Card</span></span>
+              <span class="card back"><span class="logo">Last<br>Card</span></span>
+              <span class="card back"><span class="logo">Last<br>Card</span></span>
+            </span>
+            <span class="pend" id="pendTag" hidden></span>
+          </button>
+          <div class="discard" id="discard"></div>
+        </div>
+        <p class="caption" id="caption" aria-live="polite"></p>
+      </section>
       <div class="fx" id="fx" hidden aria-hidden="true"></div>
-    </section>
+    </div>
     <section class="dock" id="dock">
       <div class="me" id="me">
         <div class="me-side" id="meL"></div>
